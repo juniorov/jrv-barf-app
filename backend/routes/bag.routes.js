@@ -2,6 +2,7 @@ import { Router } from 'express';
 import Bag from '../models/Bag.js';
 import Ingredient from '../models/Ingredient.js';
 import Pet from '../models/Pet.js';
+import ConsumptionHistory from '../models/ConsumptionHistory.js';
 import { authRequired } from '../middleware/auth.js';
 
 // Rutas para gestionar las bolsas o platos incompletos
@@ -33,7 +34,6 @@ router.get('/', async (req, res, next) => {
 router.post('/', async (req, res, next) => {
   try {
     const { name, ingredients, quantity, pet } = req.body;
-    const max = req.user.maxIngredientsPerBag;
 
     if (!name || !Array.isArray(ingredients) || !ingredients.length || !quantity) {
       return res
@@ -41,10 +41,25 @@ router.post('/', async (req, res, next) => {
         .json({ message: 'Nombre, ingredientes y cantidad son obligatorios' });
     }
 
-    if (ingredients.length > max) {
+    // Determinar el máximo de ingredientes permitidos
+    let maxIngredientsAllowed = 5; // Valor por defecto
+    let petId = null;
+    
+    // Si viene una mascota, validamos que exista y usamos su límite de ingredientes
+    if (pet) {
+      const foundPet = await Pet.findOne({ _id: pet, user: req.user._id });
+      if (!foundPet) {
+        return res.status(400).json({ message: 'Mascota inválida o que no pertenece al usuario' });
+      }
+      petId = foundPet._id;
+      maxIngredientsAllowed = foundPet.maxIngredientsPerBag || 5;
+    }
+
+    if (ingredients.length > maxIngredientsAllowed) {
+      const context = pet ? 'esta mascota' : 'tu usuario';
       return res
         .status(400)
-        .json({ message: `Máximo ${max} ingredientes por bolsa configurado para tu usuario` });
+        .json({ message: `Máximo ${maxIngredientsAllowed} ingredientes por bolsa configurado para ${context}` });
     }
 
     const ingredientIds = ingredients.map((i) => i.ingredient);
@@ -55,16 +70,6 @@ router.post('/', async (req, res, next) => {
 
     if (existing.length !== ingredientIds.length) {
       return res.status(400).json({ message: 'Hay ingredientes inválidos o que no pertenecen al usuario' });
-    }
-
-    // Si viene una mascota, validamos que exista y pertenezca al usuario
-    let petId = null;
-    if (pet) {
-      const foundPet = await Pet.findOne({ _id: pet, user: req.user._id }).select('_id');
-      if (!foundPet) {
-        return res.status(400).json({ message: 'Mascota inválida o que no pertenece al usuario' });
-      }
-      petId = foundPet._id;
     }
 
     const bag = await Bag.create({
@@ -88,15 +93,28 @@ router.put('/:id', async (req, res, next) => {
   try {
     const { name, ingredients, quantity, pet } = req.body;
 
-    if (ingredients && ingredients.length > req.user.maxIngredientsPerBag) {
+    // Determinar el máximo de ingredientes permitidos
+    let maxIngredientsAllowed = 5; // Valor por defecto
+    
+    // Si viene una mascota, validamos que exista y usamos su límite de ingredientes
+    if (pet) {
+      const foundPet = await Pet.findOne({ _id: pet, user: req.user._id });
+      if (!foundPet) {
+        return res.status(400).json({ message: 'Mascota inválida o que no pertenece al usuario' });
+      }
+      maxIngredientsAllowed = foundPet.maxIngredientsPerBag || 5;
+    }
+
+    if (ingredients && ingredients.length > maxIngredientsAllowed) {
+      const context = pet ? 'esta mascota' : 'tu usuario';
       return res
         .status(400)
-        .json({ message: `Máximo ${req.user.maxIngredientsPerBag} ingredientes por bolsa configurado para tu usuario` });
+        .json({ message: `Máximo ${maxIngredientsAllowed} ingredientes por bolsa configurado para ${context}` });
     }
 
     const update = { name, ingredients, quantity };
 
-    // Si viene una mascota, validamos que exista y pertenezca al usuario
+    // Actualizar la mascota asociada
     if (pet) {
       const foundPet = await Pet.findOne({ _id: pet, user: req.user._id }).select('_id');
       if (!foundPet) {
@@ -111,7 +129,7 @@ router.put('/:id', async (req, res, next) => {
     const bag = await Bag.findOneAndUpdate(
       { _id: req.params.id, user: req.user._id },
       update,
-      { new: true, runValidators: true },
+      { returnDocument: 'after', runValidators: true },
     ).populate(['ingredients.ingredient', 'pet']);
 
     if (!bag) {
@@ -137,21 +155,49 @@ router.delete('/:id', async (req, res, next) => {
   }
 });
 
-// Marca una bolsa como completada e incrementa el contador de bolsas completadas
+// Marca una bolsa como completada y aumenta el inventario de la mascota
 router.post('/:id/complete', async (req, res, next) => {
   try {
-    const bag = await Bag.findOne({ _id: req.params.id, user: req.user._id });
+    const bag = await Bag.findOne({ _id: req.params.id, user: req.user._id }).populate('pet');
     if (!bag) {
       return res.status(404).json({ message: 'Bolsa no encontrada' });
     }
 
-    bag.completedCount += bag.quantity;
-    bag.isCompleted = true;
+    if (!bag.pet) {
+      return res.status(400).json({ message: 'La bolsa debe estar asociada a una mascota para completarla' });
+    }
+
+    // Marcar como completada y sumar al inventario total de la mascota
+    bag.isComplete = true;
     await bag.save();
 
-    const populated = await bag.populate('ingredients.ingredient');
+    // Aumentar el inventario total de la mascota
+    bag.pet.totalInventory += bag.quantity;
+    await bag.pet.save();
 
-    res.json(populated);
+    // Registrar en el historial de consumo (agregar al inventario)
+    const consumptionDate = new Date();
+    consumptionDate.setHours(0, 0, 0, 0); // Solo la fecha, sin hora
+
+    for (const ingredientBag of bag.ingredients) {
+      await ConsumptionHistory.create({
+        user: req.user._id,
+        pet: bag.pet._id,
+        ingredient: ingredientBag.ingredient,
+        bag: bag._id,
+        gramsConsumed: 0, // Se agregó al inventario, no se consumió
+        bagsConsumed: 0,
+        consumptionDate,
+        consumptionType: 'inventory_add'
+      });
+    }
+
+    const populated = await bag.populate('ingredients.ingredient');
+    res.json({
+      bag: populated,
+      newInventory: bag.pet.totalInventory,
+      message: `${bag.quantity} bolsas agregadas al inventario de ${bag.pet.name}`
+    });
   } catch (error) {
     next(error);
   }

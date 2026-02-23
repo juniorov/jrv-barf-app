@@ -27,13 +27,16 @@ const logout = () => {
         <div id="mainNavbar" class="collapse navbar-collapse">
           <ul class="navbar-nav me-auto mb-2 mb-lg-0">
             <li class="nav-item">
+              <RouterLink to="/app/dashboard" class="nav-link">Dashboard</RouterLink>
+            </li>
+            <li class="nav-item">
+              <RouterLink to="/app/pets" class="nav-link">Mascotas</RouterLink>
+            </li>
+            <li class="nav-item">
               <RouterLink to="/app/ingredients" class="nav-link">Ingredientes</RouterLink>
             </li>
             <li class="nav-item">
               <RouterLink to="/app/bags" class="nav-link">Bolsas incompletas</RouterLink>
-            </li>
-            <li class="nav-item">
-              <RouterLink to="/app/pets" class="nav-link">Mascotas</RouterLink>
             </li>
             <li class="nav-item">
               <RouterLink to="/app/portions" class="nav-link">Porciones / Compra</RouterLink>

@@ -5,6 +5,7 @@ const LoginView = () => import('../views/auth/LoginView.vue');
 const RegisterView = () => import('../views/auth/RegisterView.vue');
 const ForgotPasswordView = () => import('../views/auth/ForgotPasswordView.vue');
 const AppLayout = () => import('../views/AppLayout.vue');
+const DashboardView = () => import('../views/DashboardView.vue');
 const IngredientsView = () => import('../views/IngredientsView.vue');
 const BagsView = () => import('../views/BagsView.vue');
 const PortionsView = () => import('../views/PortionsView.vue');
@@ -43,7 +44,12 @@ const router = createRouter({
       children: [
         {
           path: '',
-          redirect: { name: 'ingredients' },
+          redirect: { name: 'dashboard' },
+        },
+        {
+          path: 'dashboard',
+          name: 'dashboard',
+          component: DashboardView,
         },
         {
           path: 'ingredients',
@@ -95,7 +101,7 @@ router.beforeEach(async (to, from, next) => {
   }
 
   if (to.meta.guestOnly && auth.isAuthenticated) {
-    return next({ name: 'ingredients' });
+    return next({ name: 'dashboard' });
   }
 
   return next();

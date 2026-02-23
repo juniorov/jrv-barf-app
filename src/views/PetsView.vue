@@ -3,10 +3,11 @@ import { onMounted, ref } from 'vue';
 import api from '../api/client.js';
 
 const pets = ref([]);
-const bags = ref([]);
 const loading = ref(false);
 const saving = ref(false);
 const feedingLoading = ref(false);
+const editingInventory = ref(null);
+const tempInventory = ref(0);
 const error = ref('');
 const success = ref('');
 
@@ -15,6 +16,7 @@ const form = ref({
   name: '',
   age: 0,
   mealsPerDay: 1,
+  maxIngredientsPerBag: 5,
   feedingTimesText: '',
 });
 
@@ -24,6 +26,7 @@ const resetForm = () => {
     name: '',
     age: 0,
     mealsPerDay: 1,
+    maxIngredientsPerBag: 5,
     feedingTimesText: '',
   };
 };
@@ -32,28 +35,43 @@ const loadPets = async () => {
   loading.value = true;
   error.value = '';
   try {
-    const [ps, bs] = await Promise.all([api.get('/pets'), api.get('/bags')]);
-    pets.value = ps;
-    bags.value = bs;
+    pets.value = await api.get('/pets');
   } catch (e) {
-    error.value = e.message || 'No se pudieron cargar las mascotas o el inventario';
+    error.value = e.message || 'No se pudieron cargar las mascotas';
   } finally {
     loading.value = false;
   }
 };
 
-const remainingBagsForPet = (petId) =>
-  bags.value
-    .filter((b) => b.pet && b.pet._id === petId && b.completedCount > 0)
-    .reduce(
-      (acc, b) => acc + Math.max(0, b.completedCount - (b.consumedCount || 0)),
-      0,
-    );
-
-const daysOfFoodForPet = (pet) => {
-  const remaining = remainingBagsForPet(pet._id);
+const getDaysOfFood = (pet) => {
+  const inventory = pet.totalInventory || 0;
   if (!pet.mealsPerDay || pet.mealsPerDay <= 0) return null;
-  return remaining / pet.mealsPerDay;
+  return inventory / pet.mealsPerDay;
+};
+
+const startEditInventory = (pet) => {
+  editingInventory.value = pet._id;
+  tempInventory.value = pet.totalInventory || 0;
+};
+
+const updateInventory = async (pet) => {
+  try {
+    const updated = await api.put(`/pets/${pet._id}`, {
+      ...pet,
+      totalInventory: Number(tempInventory.value)
+    });
+    pets.value = pets.value.map((p) => (p._id === updated._id ? updated : p));
+    success.value = `Inventario de ${pet.name} actualizado a ${tempInventory.value} bolsas`;
+    editingInventory.value = null;
+    error.value = '';
+  } catch (e) {
+    error.value = e.message || 'No se pudo actualizar el inventario';
+  }
+};
+
+const cancelEditInventory = () => {
+  editingInventory.value = null;
+  tempInventory.value = 0;
 };
 
 const onSubmit = async () => {
@@ -69,6 +87,7 @@ const onSubmit = async () => {
       name: form.value.name,
       age: Number(form.value.age),
       mealsPerDay: Number(form.value.mealsPerDay || 0),
+      maxIngredientsPerBag: Number(form.value.maxIngredientsPerBag || 5),
       feedingTimes: form.value.feedingTimesText
         .split(',')
         .map((t) => t.trim())
@@ -97,6 +116,7 @@ const editPet = (pet) => {
     name: pet.name,
     age: pet.age,
     mealsPerDay: pet.mealsPerDay ?? 1,
+    maxIngredientsPerBag: pet.maxIngredientsPerBag ?? 5,
     feedingTimesText: Array.isArray(pet.feedingTimes)
       ? pet.feedingTimes.join(', ')
       : '',
@@ -111,7 +131,7 @@ const registerFeedingDay = async (pet) => {
   feedingLoading.value = true;
   try {
     const res = await api.post(`/pets/${pet._id}/feed-day`, {});
-    success.value = `Se registró un día de comida para ${pet.name}. Bolsas restantes: ${res.remainingBags}`;
+    success.value = `Se registró un día de comida para ${pet.name}. Inventario restante: ${res.remainingInventory} bolsas`;
     await loadPets();
   } catch (e) {
     error.value = e.message || 'No se pudo registrar el día de comida';
@@ -191,6 +211,18 @@ onMounted(loadPets);
               required
             />
           </div>
+          <div class="col-md-3">
+            <label class="form-label">Máx. ingredientes por bolsa</label>
+            <input
+              v-model.number="form.maxIngredientsPerBag"
+              type="number"
+              min="1"
+              max="20"
+              step="1"
+              class="form-control"
+              required
+            />
+          </div>
           <div class="col-md-6">
             <label class="form-label">Horas de comida (HH:MM, separadas por coma)</label>
             <input
@@ -230,7 +262,8 @@ onMounted(loadPets);
                 <th>Nombre</th>
                 <th>Edad</th>
                 <th>Comidas/día</th>
-                <th>Bolsas disponibles</th>
+                <th>Máx. ingredientes</th>
+                <th>Inventario Total</th>
                 <th>Días de comida</th>
                 <th>Acciones</th>
               </tr>
@@ -240,10 +273,50 @@ onMounted(loadPets);
                 <td>{{ pet.name }}</td>
                 <td>{{ pet.age }} años</td>
                 <td>{{ pet.mealsPerDay ?? 0 }}</td>
-                <td>{{ remainingBagsForPet(pet._id) }}</td>
+                <td>{{ pet.maxIngredientsPerBag ?? 5 }}</td>
                 <td>
-                  <span v-if="daysOfFoodForPet(pet) !== null">
-                    {{ daysOfFoodForPet(pet).toFixed(1) }} días
+                  <div v-if="editingInventory === pet._id" class="d-flex align-items-center gap-1">
+                    <input 
+                      type="number" 
+                      class="form-control form-control-sm" 
+                      style="width: 80px;"
+                      v-model.number="tempInventory"
+                      min="0"
+                      @keyup.enter="updateInventory(pet)"
+                      @keyup.escape="cancelEditInventory"
+                    >
+                    <button 
+                      type="button" 
+                      class="btn btn-outline-success btn-sm"
+                      @click="updateInventory(pet)"
+                      title="Guardar"
+                    >
+                      <i class="bi bi-check"></i>
+                    </button>
+                    <button 
+                      type="button" 
+                      class="btn btn-outline-secondary btn-sm"
+                      @click="cancelEditInventory"
+                      title="Cancelar"
+                    >
+                      <i class="bi bi-x"></i>
+                    </button>
+                  </div>
+                  <div v-else class="d-flex align-items-center gap-2">
+                    <span>{{ pet.totalInventory ?? 0 }} bolsas</span>
+                    <button 
+                      type="button" 
+                      class="btn btn-outline-primary btn-sm"
+                      @click="startEditInventory(pet)"
+                      title="Editar inventario"
+                    >
+                      <i class="bi bi-pencil"></i>
+                    </button>
+                  </div>
+                </td>
+                <td>
+                  <span v-if="getDaysOfFood(pet) !== null">
+                    {{ getDaysOfFood(pet).toFixed(1) }} días
                   </span>
                   <span v-else class="text-muted small">Sin comidas/día</span>
                 </td>

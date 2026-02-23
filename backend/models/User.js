@@ -19,11 +19,6 @@ const userSchema = new mongoose.Schema(
       required: true,
       minlength: 6,
     },
-    maxIngredientsPerBag: {
-      type: Number,
-      default: 5,
-      min: 1,
-    },
     resetPasswordToken: {
       type: String,
     },

@@ -27,12 +27,10 @@ const bagSchema = new mongoose.Schema(
         message: 'La bolsa debe contener al menos un ingrediente',
       },
     },
+    // Cantidad de bolsas de este tipo que se pueden hacer
     quantity: { type: Number, required: true, min: 1 },
-    // Número total de bolsas completas generadas a partir de esta definición
-    completedCount: { type: Number, default: 0, min: 0 },
-    // Número de bolsas ya consumidas (comidas dadas) de esta definición
-    consumedCount: { type: Number, default: 0, min: 0 },
-    isCompleted: { type: Boolean, default: false },
+    // Indica si es una receta completa (true) o incompleta (false)
+    isComplete: { type: Boolean, default: false },
   },
   { timestamps: true },
 );

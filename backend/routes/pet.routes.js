@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import Pet from '../models/Pet.js';
 import Bag from '../models/Bag.js';
+import ConsumptionHistory from '../models/ConsumptionHistory.js';
 import { authRequired } from '../middleware/auth.js';
 
 // Rutas para gestionar las mascotas del usuario (nombre, edad, comidas y consumo automático)
@@ -97,7 +98,10 @@ async function applyInventoryAutoUpdateForPet(pet, userId) {
     user: userId,
     pet: pet._id,
     completedCount: { $gt: 0 },
-  }).sort({ createdAt: 1 });
+  }).populate('ingredients.ingredient').sort({ createdAt: 1 });
+
+  // Crear fecha sin hora para el registro de consumo (solo día)
+  const consumptionDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
 
   for (const bag of bags) {
     if (remainingToConsume <= 0) break;
@@ -108,6 +112,38 @@ async function applyInventoryAutoUpdateForPet(pet, userId) {
     bag.consumedCount = (bag.consumedCount || 0) + consume;
     remainingToConsume -= consume;
     await bag.save();
+
+    // Registrar el consumo en el historial para cada ingrediente de la bolsa
+    for (const ingredientBag of bag.ingredients) {
+      const gramsConsumed = ingredientBag.gramsPerBag * consume;
+      
+      // Buscar si ya existe un registro para este día, mascota e ingrediente
+      const existingHistory = await ConsumptionHistory.findOne({
+        user: userId,
+        pet: pet._id,
+        ingredient: ingredientBag.ingredient._id,
+        consumptionDate: consumptionDate
+      });
+
+      if (existingHistory) {
+        // Actualizar el registro existente
+        existingHistory.gramsConsumed += gramsConsumed;
+        existingHistory.bagsConsumed += consume;
+        await existingHistory.save();
+      } else {
+        // Crear nuevo registro
+        await ConsumptionHistory.create({
+          user: userId,
+          pet: pet._id,
+          ingredient: ingredientBag.ingredient._id,
+          bag: bag._id,
+          gramsConsumed,
+          bagsConsumed: consume,
+          consumptionDate,
+          consumptionType: 'automatic'
+        });
+      }
+    }
   }
 
   // Actualizamos la fecha de última actualización de inventario
@@ -134,7 +170,7 @@ router.get('/', async (req, res, next) => {
 // Crea una nueva mascota
 router.post('/', async (req, res, next) => {
   try {
-    const { name, age, mealsPerDay = 1, feedingTimes = [] } = req.body;
+    const { name, age, mealsPerDay = 1, maxIngredientsPerBag = 5, totalInventory = 0, feedingTimes = [] } = req.body;
 
     if (!name || age === undefined) {
       return res.status(400).json({ message: 'Nombre y edad son obligatorios' });
@@ -145,6 +181,8 @@ router.post('/', async (req, res, next) => {
       name,
       age,
       mealsPerDay,
+      maxIngredientsPerBag,
+      totalInventory,
       feedingTimes,
     });
 
@@ -160,12 +198,19 @@ router.post('/', async (req, res, next) => {
 // Actualiza una mascota existente
 router.put('/:id', async (req, res, next) => {
   try {
-    const { name, age, mealsPerDay, feedingTimes } = req.body;
+    const { name, age, mealsPerDay, maxIngredientsPerBag, feedingTimes, totalInventory } = req.body;
+
+    const updateData = { name, age, mealsPerDay, maxIngredientsPerBag, feedingTimes };
+    
+    // Solo incluir totalInventory si está presente en el request
+    if (typeof totalInventory === 'number') {
+      updateData.totalInventory = totalInventory;
+    }
 
     const pet = await Pet.findOneAndUpdate(
       { _id: req.params.id, user: req.user._id },
-      { name, age, mealsPerDay, feedingTimes },
-      { new: true, runValidators: true },
+      updateData,
+      { returnDocument: 'after', runValidators: true },
     );
 
     if (!pet) {
@@ -173,6 +218,37 @@ router.put('/:id', async (req, res, next) => {
     }
 
     res.json(pet);
+  } catch (error) {
+    next(error);
+  }
+});
+
+// Actualiza el inventario total de una mascota
+router.patch('/:id/inventory', async (req, res, next) => {
+  try {
+    const { totalInventory } = req.body;
+
+    if (typeof totalInventory !== 'number' || totalInventory < 0) {
+      return res.status(400).json({ 
+        message: 'El inventario total debe ser un número mayor o igual a 0' 
+      });
+    }
+
+    const pet = await Pet.findOne({ _id: req.params.id, user: req.user._id });
+    if (!pet) {
+      return res.status(404).json({ message: 'Mascota no encontrada' });
+    }
+
+    const oldInventory = pet.totalInventory;
+    pet.totalInventory = totalInventory;
+    await pet.save();
+
+    res.json({
+      pet,
+      oldInventory,
+      newInventory: totalInventory,
+      message: `Inventario actualizado de ${oldInventory} a ${totalInventory} bolsas`
+    });
   } catch (error) {
     next(error);
   }
@@ -195,43 +271,70 @@ router.post('/:id/feed-day', async (req, res, next) => {
     let remainingToConsume = meals;
 
     // Obtenemos todas las bolsas COMPLETADAS para esta mascota y usuario
-    const bags = await Bag.find({
-      user: req.user._id,
-      pet: pet._id,
-      completedCount: { $gt: 0 },
-    }).sort({ createdAt: 1 });
-
-    for (const bag of bags) {
-      if (remainingToConsume <= 0) break;
-      const available = bag.completedCount - (bag.consumedCount || 0);
-      if (available <= 0) continue;
-
-      const consume = Math.min(available, remainingToConsume);
-      bag.consumedCount = (bag.consumedCount || 0) + consume;
-      remainingToConsume -= consume;
-      await bag.save();
+// Registra un "día de comida" para la mascota:
+// consume mealsPerDay del inventario total de la mascota
+router.post('/:id/feed-day', async (req, res, next) => {
+  try {
+    const pet = await Pet.findOne({ _id: req.params.id, user: req.user._id });
+    if (!pet) {
+      return res.status(404).json({ message: 'Mascota no encontrada' });
     }
 
-    const consumed = meals - remainingToConsume;
+    const meals = pet.mealsPerDay;
+    if (!meals || meals <= 0) {
+      return res.status(400).json({ message: 'mealsPerDay debe ser mayor que 0 para registrar un día de comida' });
+    }
 
-    // Calculamos bolsas restantes totales para esta mascota después del consumo
-    const allBags = await Bag.find({
-      user: req.user._id,
+    if (pet.totalInventory < meals) {
+      return res.status(400).json({ 
+        message: `Inventario insuficiente. Necesitas ${meals} bolsas pero solo tienes ${pet.totalInventory}` 
+      });
+    }
+
+    // Consumir del inventario total
+    pet.totalInventory -= meals;
+    pet.consumedCount += meals;
+    await pet.save();
+
+    // Registrar en el historial (consumo manual)
+    const consumptionDate = new Date();
+    consumptionDate.setHours(0, 0, 0, 0);
+    
+    // Buscar una bolsa representativa para los ingredientes
+    const representativeBag = await Bag.findOne({ 
+      user: req.user._id, 
       pet: pet._id,
-      completedCount: { $gt: 0 },
-    });
-
-    const remainingBags = allBags.reduce(
-      (acc, b) => acc + Math.max(0, b.completedCount - (b.consumedCount || 0)),
-      0,
-    );
+      isComplete: true 
+    }).populate('ingredients.ingredient');
+    
+    if (representativeBag) {
+      for (const ingredientBag of representativeBag.ingredients) {
+        const gramsConsumed = ingredientBag.gramsPerBag * meals;
+        
+        await ConsumptionHistory.create({
+          user: req.user._id,
+          pet: pet._id,
+          ingredient: ingredientBag.ingredient._id,
+          bag: representativeBag._id,
+          gramsConsumed,
+          bagsConsumed: meals,
+          consumptionDate,
+          consumptionType: 'manual'
+        });
+      }
+    }
 
     res.json({
+      message: `Se registró un día de comida para ${pet.name}`,
       petId: pet._id,
       mealsRequested: meals,
-      mealsConsumed: consumed,
-      remainingBags,
+      mealsConsumed: meals,
+      remainingInventory: pet.totalInventory
     });
+  } catch (error) {
+    next(error);
+  }
+});
   } catch (error) {
     next(error);
   }

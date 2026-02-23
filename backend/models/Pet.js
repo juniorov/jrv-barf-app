@@ -11,6 +11,12 @@ const petSchema = new mongoose.Schema(
     age: { type: Number, required: true, min: 0 },
     // Número de comidas (bolsas) que recibe esta mascota al día
     mealsPerDay: { type: Number, default: 1, min: 0 },
+    // Máximo número de ingredientes permitidos por bolsa para esta mascota
+    maxIngredientsPerBag: { type: Number, default: 5, min: 1, max: 20 },
+    // Inventario total de bolsas completas disponibles para esta mascota
+    totalInventory: { type: Number, default: 0, min: 0 },
+    // Número de bolsas consumidas (para estadísticas)
+    consumedCount: { type: Number, default: 0, min: 0 },
     // Horas aproximadas en las que come (ej: ["08:00","20:00"])
     feedingTimes: [{ type: String }],
     // Última vez que se actualizó el inventario automático para esta mascota

@@ -1,38 +1,31 @@
 <script setup>
-import { ref } from 'vue';
-import { useAuthStore } from '../stores/auth.js';
+import { ref, onMounted } from 'vue';
+import { useRouter } from 'vue-router';
 import api from '../api/client.js';
 
-const auth = useAuthStore();
-
-const maxIngredientsPerBag = ref(auth.user?.maxIngredientsPerBag ?? 5);
+const router = useRouter();
+const systemInfo = ref({});
 const error = ref('');
-const success = ref('');
-const saving = ref(false);
+const loading = ref(false);
 
-const saveConfig = async () => {
+const loadSystemInfo = async () => {
+  loading.value = true;
   error.value = '';
-  success.value = '';
-  if (!maxIngredientsPerBag.value || maxIngredientsPerBag.value < 1) {
-    error.value = 'La cantidad máxima debe ser un número positivo';
-    return;
-  }
-  saving.value = true;
   try {
-    const res = await api.put('/config/settings', {
-      maxIngredientsPerBag: Number(maxIngredientsPerBag.value),
-    });
-    if (auth.user) {
-      auth.user.maxIngredientsPerBag = res.maxIngredientsPerBag;
-      localStorage.setItem('barf_user', JSON.stringify(auth.user));
-    }
-    success.value = 'Configuración guardada correctamente';
+    const res = await api.get('/config/settings');
+    systemInfo.value = res;
   } catch (e) {
-    error.value = e.message || 'No se pudo guardar la configuración';
+    error.value = e.message || 'No se pudo cargar la información del sistema';
   } finally {
-    saving.value = false;
+    loading.value = false;
   }
 };
+
+const goToPets = () => {
+  router.push({ name: 'pets' });
+};
+
+onMounted(loadSystemInfo);
 </script>
 
 <template>
@@ -41,34 +34,84 @@ const saveConfig = async () => {
       <h2 class="h4 mb-0">Configuración de la aplicación</h2>
     </div>
 
-    <p class="text-muted small mb-3">
-      Ajusta el número máximo de ingredientes permitidos por bolsa o plato completo. Esta
-      configuración se aplica a tu usuario.
-    </p>
+    <div v-if="loading" class="text-center py-4">
+      <div class="spinner-border text-primary" role="status">
+        <span class="visually-hidden">Cargando...</span>
+      </div>
+    </div>
 
-    <div v-if="error" class="alert alert-danger py-2">{{ error }}</div>
-    <div v-if="success" class="alert alert-success py-2">{{ success }}</div>
+    <div v-else>
+      <div v-if="error" class="alert alert-danger py-2">{{ error }}</div>
 
-    <div class="card">
-      <div class="card-body">
-        <form @submit.prevent="saveConfig" class="row g-3">
-          <div class="col-md-4">
-            <label class="form-label">Máximo de ingredientes por bolsa</label>
-            <input
-              v-model.number="maxIngredientsPerBag"
-              type="number"
-              min="1"
-              class="form-control"
-              required
-            />
+      <div class="row">
+        <!-- Información del sistema -->
+        <div class="col-md-8">
+          <div class="card">
+            <div class="card-header">
+              <h5 class="card-title mb-0">
+                <i class="bi bi-info-circle me-2"></i>
+                Configuración por Mascota
+              </h5>
+            </div>
+            <div class="card-body">
+              <p class="mb-3">
+                Las configuraciones específicas como el <strong>máximo de ingredientes por bolsa</strong> 
+                ahora se configuran individualmente para cada mascota, permitiendo dietas personalizadas.
+              </p>
+              
+              <div class="alert alert-info d-flex align-items-center" role="alert">
+                <i class="bi bi-lightbulb me-2"></i>
+                <div>
+                  <strong>¿Por qué este cambio?</strong><br>
+                  Cada mascota puede tener necesidades dietéticas diferentes. Una mascota grande 
+                  puede necesitar más ingredientes por bolsa que una pequeña.
+                </div>
+              </div>
+
+              <div class="d-flex justify-content-between align-items-center p-3 bg-light rounded">
+                <div>
+                  <h6 class="mb-1">Gestionar Configuraciones por Mascota</h6>
+                  <small class="text-muted">
+                    Configura el máximo de ingredientes, comidas diarias y horarios para cada mascota
+                  </small>
+                </div>
+                <button type="button" class="btn btn-primary" @click="goToPets">
+                  <i class="bi bi-arrow-right me-1"></i>
+                  Ir a Mascotas
+                </button>
+              </div>
+            </div>
           </div>
-          <div class="col-12 d-flex justify-content-end">
-            <button type="submit" class="btn btn-primary" :disabled="saving">
-              <span v-if="saving" class="spinner-border spinner-border-sm me-1" />
-              Guardar configuración
-            </button>
+        </div>
+
+        <!-- Información adicional -->
+        <div class="col-md-4">
+          <div class="card">
+            <div class="card-header">
+              <h6 class="card-title mb-0">
+                <i class="bi bi-gear me-2"></i>
+                Valores por Defecto
+              </h6>
+            </div>
+            <div class="card-body">
+              <ul class="list-unstyled mb-0">
+                <li class="mb-2">
+                  <strong>Máx. ingredientes:</strong> {{ systemInfo.defaultMaxIngredients || 5 }} por bolsa
+                </li>
+                <li class="mb-2">
+                  <strong>Comidas diarias:</strong> 1 por día
+                </li>
+                <li>
+                  <strong>Horarios:</strong> Flexibles
+                </li>
+              </ul>
+              <hr>
+              <small class="text-muted">
+                Estos son los valores que se asignan automáticamente al crear una nueva mascota.
+              </small>
+            </div>
           </div>
-        </form>
+        </div>
       </div>
     </div>
   </div>

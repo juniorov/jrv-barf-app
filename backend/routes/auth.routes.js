@@ -28,7 +28,6 @@ router.post('/register', async (req, res, next) => {
       user: {
         id: user._id,
         email: user.email,
-        maxIngredientsPerBag: user.maxIngredientsPerBag,
       },
     });
   } catch (error) {
@@ -60,7 +59,6 @@ router.post('/login', async (req, res, next) => {
       user: {
         id: user._id,
         email: user.email,
-        maxIngredientsPerBag: user.maxIngredientsPerBag,
       },
     });
   } catch (error) {
@@ -70,8 +68,8 @@ router.post('/login', async (req, res, next) => {
 // Devuelve los datos del usuario autenticado a partir del token
 router.get('/me', authRequired, async (req, res, next) => {
   try {
-    const { _id, email, maxIngredientsPerBag } = req.user;
-    res.json({ id: _id, email, maxIngredientsPerBag });
+    const { _id, email } = req.user;
+    res.json({ id: _id, email });
   } catch (error) {
     next(error);
   }

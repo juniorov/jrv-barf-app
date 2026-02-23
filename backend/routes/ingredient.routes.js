@@ -51,7 +51,7 @@ router.put('/:id', async (req, res, next) => {
     const ingredient = await Ingredient.findOneAndUpdate(
       { _id: req.params.id, user: req.user._id },
       { name, code, gramsPerPortion, desiredPortions },
-      { new: true, runValidators: true },
+      { returnDocument: 'after', runValidators: true },
     );
 
     if (!ingredient) {

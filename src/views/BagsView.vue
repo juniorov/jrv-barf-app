@@ -13,9 +13,14 @@ const saving = ref(false);
 const error = ref('');
 const success = ref('');
 
-const maxIngredientsPerBag = computed(
-  () => auth.user?.maxIngredientsPerBag ?? 5,
-);
+const maxIngredientsPerBag = computed(() => {
+  if (form.value.petId) {
+    const selectedPet = pets.value.find(p => p._id === form.value.petId);
+    return selectedPet?.maxIngredientsPerBag ?? 5;
+  }
+  // Valor por defecto cuando no hay mascota seleccionada
+  return 5;
+});
 
 const form = ref({
   id: null,
@@ -152,23 +157,25 @@ const deleteBag = async (bag) => {
 };
 
 const completeBag = async (bag) => {
+  if (!bag.pet) {
+    error.value = 'La bolsa debe estar asociada a una mascota para completarla';
+    return;
+  }
+
   const confirmComplete = window.confirm(
-    `¿Marcar la bolsa "${bag.name}" como completada? Se incrementará el contador de bolsas completadas en el inventario.`,
+    `¿Marcar ${bag.quantity} bolsas de "${bag.name}" como completadas? Se agregarán al inventario de ${bag.pet.name}.`,
   );
   if (!confirmComplete) return;
 
   try {
-    await api.post(`/bags/${bag._id}/complete`, {});
+    const response = await api.post(`/bags/${bag._id}/complete`, {});
     bags.value = bags.value.filter((b) => b._id !== bag._id);
-    success.value = 'Bolsa marcada como completada';
+    success.value = response.message;
     error.value = '';
   } catch (e) {
     error.value = e.message || 'No se pudo completar la bolsa';
   }
 };
-
-const availableCompletedBags = (bag) =>
-  Math.max(0, bag.completedCount - (bag.consumedCount || 0));
 
 onMounted(loadData);
 </script>
@@ -177,14 +184,23 @@ onMounted(loadData);
   <div>
     <div class="d-flex justify-content-between align-items-center mb-3">
       <h2 class="h4 mb-0">Bolsas incompletas</h2>
-      <span class="badge bg-secondary" v-if="maxIngredientsPerBag">
-        Máx. {{ maxIngredientsPerBag }} ingredientes por bolsa
-      </span>
+      <div class="d-flex gap-2">
+        <span v-if="form.petId" class="badge bg-success">
+          <i class="bi bi-heart-fill me-1"></i>
+          Mascota: {{ pets.find(p => p._id === form.petId)?.name }} 
+          (Máx. {{ maxIngredientsPerBag }} ingredientes)
+        </span>
+        <span v-else-if="maxIngredientsPerBag" class="badge bg-secondary">
+          <i class="bi bi-info-circle me-1"></i>
+          Sin mascota - Máx. {{ maxIngredientsPerBag }} ingredientes por defecto
+        </span>
+      </div>
     </div>
 
     <p class="text-muted small mb-3">
-      Define bolsas o platos incompletos indicando qué ingredientes llevan y en qué cantidad. Puedes
-      marcar una bolsa como completada para actualizar tu inventario.
+      Define bolsas o platos incompletos indicando qué ingredientes llevan y en qué cantidad. 
+      <strong>Selecciona una mascota</strong> para aplicar sus configuraciones específicas (máximo de ingredientes permitidos).
+      Puedes marcar una bolsa como completada para actualizar tu inventario.
     </p>
 
     <div v-if="error" class="alert alert-danger py-2">{{ error }}</div>
@@ -297,7 +313,7 @@ onMounted(loadData);
                 <th>Mascota</th>
                 <th>Cantidad</th>
                 <th>Ingredientes</th>
-                <th>Completadas / Disponibles</th>
+                <th>Estado</th>
                 <th>Acciones</th>
               </tr>
             </thead>
@@ -319,9 +335,13 @@ onMounted(loadData);
                   </ul>
                 </td>
                 <td>
-                  {{ bag.completedCount }}
-                  <span class="text-muted small">
-                    ({{ availableCompletedBags(bag) }} disponibles)
+                  <span v-if="bag.isComplete" class="badge bg-success">
+                    <i class="bi bi-check-circle me-1"></i>
+                    Completada  
+                  </span>
+                  <span v-else class="badge bg-warning text-dark">
+                    <i class="bi bi-clock me-1"></i>
+                    Incompleta
                   </span>
                 </td>
                 <td>

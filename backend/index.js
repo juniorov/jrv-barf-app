@@ -7,9 +7,12 @@ import ingredientRoutes from './routes/ingredient.routes.js';
 import bagRoutes from './routes/bag.routes.js';
 import configRoutes from './routes/config.routes.js';
 import petRoutes from './routes/pet.routes.js';
+import dashboardRoutes from './routes/dashboard.routes.js';
 
 // Cargamos variables de entorno necesarias para la API
-dotenv.config();
+if (process.env.NODE_ENV !== 'production') {
+  dotenv.config();
+}
 
 const app = express();
 const PORT = process.env.PORT || 4000;
@@ -35,6 +38,7 @@ app.use('/api/ingredients', ingredientRoutes);
 app.use('/api/bags', bagRoutes);
 app.use('/api/config', configRoutes);
 app.use('/api/pets', petRoutes);
+app.use('/api/dashboard', dashboardRoutes);
 
 // Middleware de manejo de errores centralizado
 app.use((err, _req, res, _next) => {

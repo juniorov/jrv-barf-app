@@ -1,0 +1,17 @@
+<svg width="192" height="192" viewBox="0 0 192 192" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="192" height="192" rx="24" fill="#4F46E5"/>
+  
+  <!-- Dog bowl icon -->
+  <circle cx="96" cy="104" r="45" fill="#FFFFFF" stroke="#4F46E5" stroke-width="3"/>
+  <circle cx="96" cy="104" r="30" fill="#F3F4F6"/>
+  
+  <!-- Food pellets -->
+  <circle cx="82" cy="97" r="4.5" fill="#4F46E5"/>
+  <circle cx="96" cy="93" r="3.7" fill="#4F46E5"/>
+  <circle cx="109" cy="101" r="3" fill="#4F46E5"/>
+  <circle cx="89" cy="112" r="2.2" fill="#4F46E5"/>
+  <circle cx="104" cy="110" r="3.3" fill="#4F46E5"/>
+  
+  <!-- App name -->
+  <text x="96" y="168" font-family="Arial, sans-serif" font-size="18" font-weight="bold" text-anchor="middle" fill="#FFFFFF">BARF</text>
+</svg>

@@ -7,6 +7,8 @@ const error = ref(null);
 const petStatistics = ref([]);
 const monthlyConsumption = ref({});
 const summary = ref({});
+const inventoryStatus = ref([]);
+const forceUpdateLoading = ref({});
 
 // Datos para el selector de mes
 const currentDate = new Date();
@@ -38,20 +40,41 @@ const formatDate = (dateString) => {
   });
 };
 
+const formatDateTime = (dateString) => {
+  if (!dateString) return 'N/A';
+  const date = new Date(dateString);
+  return date.toLocaleDateString('es-ES', {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit'
+  });
+};
+
+const getUpdateStatusBadge = (hoursSinceUpdate) => {
+  if (hoursSinceUpdate < 1) return { class: 'bg-success', text: 'Actualizado' };
+  if (hoursSinceUpdate < 24) return { class: 'bg-info', text: 'Reciente' };
+  if (hoursSinceUpdate < 72) return { class: 'bg-warning text-dark', text: 'Pendiente' };
+  return { class: 'bg-danger', text: 'Desactualizado' };
+};
+
 const loadDashboardData = async () => {
   try {
     loading.value = true;
     error.value = null;
     
-    const [petStatsResponse, monthlyResponse, summaryResponse] = await Promise.all([
+    const [petStatsResponse, monthlyResponse, summaryResponse, inventoryResponse] = await Promise.all([
       apiClient.get('/dashboard/pet-statistics'),
       apiClient.get(`/dashboard/monthly-consumption?year=${selectedYear.value}&month=${selectedMonth.value}`),
-      apiClient.get('/dashboard/summary')
+      apiClient.get('/dashboard/summary'),
+      apiClient.get('/pets/inventory-status')
     ]);
     
     petStatistics.value = petStatsResponse;
     monthlyConsumption.value = monthlyResponse;
     summary.value = summaryResponse;
+    inventoryStatus.value = inventoryResponse.pets || [];
     
   } catch (err) {
     error.value = err.message || 'Error al cargar los datos del dashboard';
@@ -68,6 +91,29 @@ const loadMonthlyData = async () => {
   } catch (err) {
     console.error('Error loading monthly data:', err);
   }
+};
+
+const forceInventoryUpdate = async (petId, petName) => {
+  try {
+    forceUpdateLoading.value[petId] = true;
+    await apiClient.post(`/pets/${petId}/force-inventory-update`);
+    
+    // Recargar los datos del dashboard
+    await loadDashboardData();
+    
+    // Mostrar mensaje de éxito (opcional, puedes usar una librería de notificaciones)
+    console.log(`Inventario actualizado para ${petName}`);
+    
+  } catch (err) {
+    console.error('Error updating inventory:', err);
+    error.value = `Error al actualizar inventario de ${petName}: ${err.message}`;
+  } finally {
+    forceUpdateLoading.value[petId] = false;
+  }
+};
+
+const getPetInventoryInfo = (petId) => {
+  return inventoryStatus.value.find(status => status.petId === petId);
 };
 
 onMounted(() => {
@@ -180,7 +226,15 @@ onMounted(() => {
                     <div class="card-header bg-light">
                       <div class="d-flex justify-content-between align-items-center">
                         <h6 class="mb-0 fw-bold">{{ stat.pet.name }}</h6>
-                        <span class="badge bg-secondary">{{ stat.pet.age }} años</span>
+                        <div class="d-flex align-items-center gap-2">
+                          <span class="badge bg-secondary">{{ stat.pet.age }} años</span>
+                          <span 
+                            v-if="getPetInventoryInfo(stat.pet.id)" 
+                            :class="['badge', getUpdateStatusBadge(getPetInventoryInfo(stat.pet.id).hoursSinceUpdate).class]"
+                          >
+                            {{ getUpdateStatusBadge(getPetInventoryInfo(stat.pet.id).hoursSinceUpdate).text }}
+                          </span>
+                        </div>
                       </div>
                     </div>
                     <div class="card-body">
@@ -202,6 +256,9 @@ onMounted(() => {
                             <div class="mb-2">
                               <strong>Comidas diarias:</strong> {{ stat.pet.mealsPerDay }}
                             </div>
+                            <div v-if="stat.pet.feedingTimes && stat.pet.feedingTimes.length > 0" class="mb-2">
+                              <strong>Horarios:</strong> {{ stat.pet.feedingTimes.join(', ') }}
+                            </div>
                             <div class="mb-2">
                               <strong>Se acaba el:</strong>
                               <span :class="stat.shouldBuyNow ? 'text-danger fw-bold' : 'text-muted'">
@@ -216,6 +273,26 @@ onMounted(() => {
                               <span v-if="stat.shouldBuyNow" class="badge bg-danger ms-2">
                                 ¡Comprar ahora!
                               </span>
+                            </div>
+                            <div v-if="getPetInventoryInfo(stat.pet.id)" class="mt-2 pt-2 border-top">
+                              <div class="d-flex justify-content-between align-items-center mb-1">
+                                <small class="text-muted">Última actualización:</small>
+                                <button 
+                                  class="btn btn-outline-primary btn-sm"
+                                  :disabled="forceUpdateLoading[stat.pet.id]"
+                                  @click="forceInventoryUpdate(stat.pet.id, stat.pet.name)"
+                                >
+                                  <span v-if="forceUpdateLoading[stat.pet.id]" class="spinner-border spinner-border-sm me-1" role="status"></span>
+                                  <i v-else class="bi bi-arrow-clockwise me-1"></i>
+                                  {{ forceUpdateLoading[stat.pet.id] ? 'Actualizando...' : 'Forzar' }}
+                                </button>
+                              </div>
+                              <small class="text-muted">
+                                {{ formatDateTime(getPetInventoryInfo(stat.pet.id).lastInventoryUpdate) }}
+                                <span class="text-primary">
+                                  (hace {{ getPetInventoryInfo(stat.pet.id).hoursSinceUpdate }}h)
+                                </span>
+                              </small>
                             </div>
                           </div>
                         </div>

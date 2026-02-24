@@ -4,6 +4,7 @@ import Bag from '../models/Bag.js';
 import Ingredient from '../models/Ingredient.js';
 import ConsumptionHistory from '../models/ConsumptionHistory.js';
 import { authRequired } from '../middleware/auth.js';
+import { applyInventoryAutoUpdateForPet } from './pet.routes.js';
 
 const router = Router();
 
@@ -17,6 +18,11 @@ router.get('/pet-statistics', async (req, res, next) => {
 
     // Obtener todas las mascotas del usuario
     const pets = await Pet.find({ user: userId });
+
+    // Aplicar rebajo automático de inventario para cada mascota
+    for (const pet of pets) {
+      await applyInventoryAutoUpdateForPet(pet, userId);
+    }
 
     if (pets.length === 0) {
       return res.json([]);
@@ -56,7 +62,9 @@ router.get('/pet-statistics', async (req, res, next) => {
             age: pet.age,
             mealsPerDay: pet.mealsPerDay,
             totalInventory: pet.totalInventory,
-            consumedCount: pet.consumedCount
+            consumedCount: pet.consumedCount,
+            feedingTimes: pet.feedingTimes || [],
+            lastInventoryUpdate: pet.lastInventoryUpdate
           },
           completeBags: pet.totalInventory,
           incompleteBagsCount,
@@ -130,6 +138,12 @@ router.get('/monthly-consumption', async (req, res, next) => {
 router.get('/summary', async (req, res, next) => {
   try {
     const userId = req.user._id;
+
+    // Aplicar rebajo automático antes de calcular estadísticas
+    const allPets = await Pet.find({ user: userId });
+    for (const pet of allPets) {
+      await applyInventoryAutoUpdateForPet(pet, userId);
+    }
 
     const [pets, bags, ingredients] = await Promise.all([
       Pet.countDocuments({ user: userId }),

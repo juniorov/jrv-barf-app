@@ -180,16 +180,19 @@ router.post('/:id/complete', async (req, res, next) => {
     consumptionDate.setHours(0, 0, 0, 0); // Solo la fecha, sin hora
 
     for (const ingredientBag of bag.ingredients) {
-      await ConsumptionHistory.create({
-        user: req.user._id,
-        pet: bag.pet._id,
-        ingredient: ingredientBag.ingredient,
-        bag: bag._id,
-        gramsConsumed: 0, // Se agregó al inventario, no se consumió
-        bagsConsumed: 0,
-        consumptionDate,
-        consumptionType: 'inventory_add'
-      });
+      // Validar que tenemos un ingrediente válido
+      if (ingredientBag.ingredient) {
+        await ConsumptionHistory.create({
+          user: req.user._id,
+          pet: bag.pet._id,
+          ingredient: ingredientBag.ingredient,
+          bag: bag._id,
+          gramsConsumed: 0, // Se agregó al inventario, no se consumió
+          bagsConsumed: 0,
+          consumptionDate,
+          consumptionType: 'inventory_add'
+        });
+      }
     }
 
     const populated = await bag.populate('ingredients.ingredient');

@@ -21,17 +21,16 @@ router.get('/', async (req, res, next) => {
 // Crea un nuevo ingrediente vinculado al usuario
 router.post('/', async (req, res, next) => {
   try {
-    const { name, code, gramsPerPortion, desiredPortions = 0 } = req.body;
+    const { name, code, desiredPortions = 0 } = req.body;
 
-    if (!name || !code || !gramsPerPortion) {
-      return res.status(400).json({ message: 'Nombre, código y gramos por porción son obligatorios' });
+    if (!name || !code) {
+      return res.status(400).json({ message: 'Nombre y código son obligatorios' });
     }
 
     const ingredient = await Ingredient.create({
       user: req.user._id,
       name,
       code,
-      gramsPerPortion,
       desiredPortions,
     });
 
@@ -47,10 +46,10 @@ router.post('/', async (req, res, next) => {
 // Actualiza los datos de un ingrediente existente
 router.put('/:id', async (req, res, next) => {
   try {
-    const { name, code, gramsPerPortion, desiredPortions } = req.body;
+    const { name, code, desiredPortions } = req.body;
     const ingredient = await Ingredient.findOneAndUpdate(
       { _id: req.params.id, user: req.user._id },
-      { name, code, gramsPerPortion, desiredPortions },
+      { name, code, desiredPortions },
       { returnDocument: 'after', runValidators: true },
     );
 

@@ -4,11 +4,25 @@ import dotenv from 'dotenv';
 // Cargamos variables de entorno para obtener el prefijo de colecciones
 dotenv.config();
 
+const petIngredientSchema = new mongoose.Schema(
+  {
+    ingredient: { type: mongoose.Schema.Types.ObjectId, ref: 'Ingredient', required: true },
+    gramsPerPortion: { type: Number, required: true, min: 1 },
+    desiredPortions: { type: Number, default: 0, min: 0 },
+  },
+  { _id: false },
+);
+
 const petSchema = new mongoose.Schema(
   {
     user: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true, index: true },
     name: { type: String, required: true, trim: true },
     age: { type: Number, required: true, min: 0 },
+    // Ingredientes asociados a esta mascota con sus cantidades específicas
+    ingredients: {
+      type: [petIngredientSchema],
+      default: [],
+    },
     // Número de comidas (bolsas) que recibe esta mascota al día
     mealsPerDay: { type: Number, default: 1, min: 0 },
     // Máximo número de ingredientes permitidos por bolsa para esta mascota

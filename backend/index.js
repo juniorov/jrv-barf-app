@@ -16,22 +16,46 @@ if (process.env.NODE_ENV !== 'production') {
 
 const app = express();
 const PORT = process.env.PORT || 4000;
-// Configuramos CORS para permitir llamadas desde el frontend (por defecto Vite en 5173)
+// Configuramos CORS para permitir llamadas desde el frontend
+// Permitimos múltiples orígenes para desarrollo y producción
+const allowedOrigins = [
+  'http://localhost:5173',
+  'http://127.0.0.1:5173',
+  'https://foodbarf.netlify.app',
+  process.env.CORS_ORIGIN // Permite configurar un origen personalizado
+].filter(Boolean); // Elimina valores undefined/null
+
+console.log('Allowed CORS origins:', allowedOrigins);
+
 app.use(
   cors({
-    origin: process.env.CORS_ORIGIN || 'http://localhost:5173',
+    origin: function (origin, callback) {
+      console.log('CORS request from origin:', origin);
+      // Permitir requests sin origen (ej: aplicaciones móviles, Postman)
+      if (!origin) return callback(null, true);
+
+      if (allowedOrigins.includes(origin)) {
+        console.log('CORS: Origin allowed');
+        return callback(null, true);
+      } else {
+        console.log('CORS: Origin blocked');
+        return callback(new Error('No permitido por política CORS'));
+      }
+    },
     credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+    exposedHeaders: ['Content-Length', 'X-Foo', 'X-Bar'],
+    preflightContinue: false,
+    optionsSuccessStatus: 200
   }),
 );
 
-// Middleware para parsear JSON en el body de las peticiones
-app.use(express.json());
-
-// Endpoint sencillo para comprobar que la API está viva
-app.get('/api/health', (_req, res) => {
-  res.json({ status: 'ok' });
+// Middleware adicional para manejar preflight requests manualmente si es necesario
+app.options('*', (req, res) => {
+  console.log('Manual OPTIONS request handled for:', req.path);
+  res.sendStatus(200);
 });
-
 // Rutas de la API separadas por dominio funcional
 app.use('/api/auth', authRoutes);
 app.use('/api/ingredients', ingredientRoutes);

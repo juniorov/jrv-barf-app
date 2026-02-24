@@ -24,7 +24,7 @@ JWT_SECRET="appssecret"
 JWT_EXPIRES_IN="8d"
 
 # Opcional: permitir frontend desde otro origen
-# CORS_ORIGIN="http://localhost:5173"
+# CORS_ORIGIN="https://tudominio.com" # Opcional: origen personalizado adicional
 
 # Opcional: puerto del backend
 # PORT=4000
@@ -38,7 +38,7 @@ JWT_EXPIRES_IN="8d"
   - **`barf_ingredients`**
   - **`barf_bags`**
 - **`JWT_SECRET`**: clave usada para firmar tokens JWT. No la compartas.
-- **`CORS_ORIGIN`**: si tu frontend no corre en `http://localhost:5173`, define aquí el origen exacto.
+- **`CORS_ORIGIN`**: (opcional) origen personalizado adicional. La API ya permite por defecto localhost y https://foodbarf.netlify.app
 
 ---
 
@@ -469,15 +469,56 @@ Respuesta:
 
 ---
 
-## 8) Problemas comunes
+## 9) Configuración de Producción
+
+### Backend en Render.com
+
+Variables de entorno requeridas en Render.com:
+
+```
+NODE_ENV=production
+MONGO_URI=mongodb://... (tu string de conexión MongoDB)
+JWT_SECRET=tu_jwt_secret_muy_seguro
+PREFIX=barf (opcional, por defecto)
+CORS_ORIGIN=https://tudominio-personalizado.com (opcional)
+```
+
+**Origen CORS:** La API permite automáticamente:
+- `http://localhost:5173` (desarrollo)
+- `http://127.0.0.1:5173` (desarrollo alternativo) 
+- `https://foodbarf.netlify.app` (producción Netlify)
+- Cualquier origen definido en `CORS_ORIGIN`
+
+### Frontend en Netlify
+
+Variable de entorno en Netlify:
+
+```
+VITE_API_URL=https://jrv-barf-app.onrender.com/api
+```
+
+---
+
+## 10) Problemas comunes
 
 ### “Failed to fetch” en el frontend
 
 Suele ser:
 - Backend no levantado (`npm run dev:server`).
-- CORS: el frontend no está en `http://localhost:5173`.
+- CORS: La API permite por defecto localhost y https://foodbarf.netlify.app
 
 Prueba:
 - Abrir `http://localhost:4000/api/health` y verificar `{"status":"ok"}`.
-- Si el frontend corre en otro origen, define `CORS_ORIGIN` en `.env` (ej: `http://127.0.0.1:5173`).
+- Si usas un dominio diferente, define `CORS_ORIGIN` en las variables de entorno.- Verificar los logs del servidor para ver mensajes de CORS como:
+  ```
+  Allowed CORS origins: [...]
+  CORS request from origin: https://tudominio.com
+  CORS: Origin allowed/blocked
+  ```
 
+### Debugging CORS en producción
+
+1. **Verificar variables de entorno** en Render.com
+2. **Revisar logs** del servidor en Render.com para mensajes CORS
+3. **Probar endpoint directo**: `https://jrv-barf-app.onrender.com/api/health`
+4. **Verificar que Netlify use** `VITE_API_URL=https://jrv-barf-app.onrender.com/api`

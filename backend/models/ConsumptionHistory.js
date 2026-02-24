@@ -11,11 +11,31 @@ const consumptionHistorySchema = new mongoose.Schema(
     ingredient: { type: mongoose.Schema.Types.ObjectId, ref: 'Ingredient', required: true, index: true },
     bag: { type: mongoose.Schema.Types.ObjectId, ref: 'Bag', required: true },
     // Gramos consumidos en esta fecha
-    gramsConsumed: { type: Number, required: true, min: 0 },
+    gramsConsumed: { 
+      type: Number, 
+      required: true, 
+      min: 0,
+      validate: {
+        validator: function(value) {
+          return !isNaN(value) && isFinite(value);
+        },
+        message: 'gramsConsumed debe ser un número válido'
+      }
+    },
     // Fecha del consumo (sin hora para poder agrupar por día)
     consumptionDate: { type: Date, required: true, index: true },
     // Referencia a cuántas bolsas se consumieron
-    bagsConsumed: { type: Number, default: 1, min: 0 },
+    bagsConsumed: { 
+      type: Number, 
+      default: 1, 
+      min: 0,
+      validate: {
+        validator: function(value) {
+          return !isNaN(value) && isFinite(value);
+        },
+        message: 'bagsConsumed debe ser un número válido'
+      }
+    },
     // Tipo de consumo: 'automatic' (por sistema), 'manual' (ajuste manual), 'inventory_add' (agregar inventario)
     consumptionType: { 
       type: String, 

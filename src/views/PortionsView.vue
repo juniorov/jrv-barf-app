@@ -148,6 +148,9 @@ const getMissingIngredientsForBag = (bag) => {
   return missingIngredients;
 };
 
+// Verificar si solo hay una mascota
+const hasSinglePet = computed(() => pets.value.length === 1);
+
 const totals = computed(() => {
   const result = [];
   
@@ -207,60 +210,118 @@ onMounted(loadPets);
           Las mascotas no tienen ingredientes asignados. Ve a la sección de Mascotas para asignar ingredientes.
         </div>
         <div class="table-responsive" v-else>
-          <table class="table table-sm align-middle">
-            <thead>
-              <tr>
-                <th>Mascota</th>
-                <th>Ingrediente</th>
-                <th>Gramos por porción</th>
-                <th>Porciones deseadas</th>
-                <th>Faltantes (bolsas incompletas)</th>
-                <th>Total porciones</th>
-                <th>Total a comprar</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-for="row in totals" :key="`${row.petId}-${row.ingredientId}`">
-                <td>{{ row.petName }}</td>
-                <td>{{ row.ingredientName }}</td>
-                <td>{{ row.gramsPerPortion }} g</td>
-                <td style="max-width: 120px;">
-                  <input
-                    v-model.number="
-                      pets
-                        .find(p => p._id === row.petId)
-                        .ingredients.find(i => i.ingredient._id === row.ingredientId)
-                        .desiredPortions
-                    "
-                    type="number"
-                    min="0"
-                    class="form-control form-control-sm"
-                  />
-                </td>
-                <td>
-                  <span class="badge" :class="row.missingPortions > 0 ? 'bg-warning text-dark' : 'bg-secondary'">
-                    {{ row.missingPortions }}
+          <!-- Vista desktop -->
+          <div class="d-none d-lg-block">
+            <table class="table table-sm align-middle">
+              <thead>
+                <tr>
+                  <th v-if="!hasSinglePet">Mascota</th>
+                  <th>Ingrediente</th>
+                  <th>Gramos por porción</th>
+                  <th>Porciones deseadas</th>
+                  <th>Faltantes (bolsas incompletas)</th>
+                  <th>Total porciones</th>
+                  <th>Total a comprar</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="row in totals" :key="`${row.petId}-${row.ingredientId}`">
+                  <td v-if="!hasSinglePet">{{ row.petName }}</td>
+                  <td>{{ row.ingredientName }}</td>
+                  <td>{{ row.gramsPerPortion }} g</td>
+                  <td style="max-width: 120px;">
+                    <input
+                      v-model.number="
+                        pets
+                          .find(p => p._id === row.petId)
+                          .ingredients.find(i => i.ingredient._id === row.ingredientId)
+                          .desiredPortions
+                      "
+                      type="number"
+                      min="0"
+                      class="form-control form-control-sm"
+                    />
+                  </td>
+                  <td>
+                    <span class="badge" :class="row.missingPortions > 0 ? 'bg-warning text-dark' : 'bg-secondary'">
+                      {{ row.missingPortions }}
+                    </span>
+                    <div v-if="row.missingPortions > 0" class="small text-muted mt-1">
+                      Bolsas incompletas
+                    </div>
+                  </td>
+                  <td>
+                    <strong>{{ row.totalPortions }}</strong>
+                    <div class="small text-muted">
+                      {{ row.desiredPortions }} deseadas + {{ row.missingPortions }} faltantes
+                    </div>
+                  </td>
+                  <td>
+                    <span v-if="row.kilos">
+                      <strong>{{ row.kilos.toFixed(2) }} kg</strong>
+                      <span class="text-muted small d-block">({{ row.totalGrams }} g)</span>
+                    </span>
+                    <span v-else><strong>{{ row.totalGrams }} g</strong></span>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          
+          <!-- Vista mobile optimizada -->
+          <div class="d-lg-none">
+            <div class="mb-2" v-if="hasSinglePet">
+              <span class="badge bg-primary">
+                <i class="bi bi-heart-fill me-1"></i>{{ pets[0].name }}
+              </span>
+            </div>
+            
+            <div v-for="row in totals" :key="`${row.petId}-${row.ingredientId}`" class="card mb-3">
+              <div class="card-header py-2">
+                <div class="d-flex justify-content-between align-items-center">
+                  <h6 class="mb-0 fw-bold">{{ row.ingredientName }}</h6>
+                  <span v-if="!hasSinglePet" class="badge bg-light text-dark">
+                    {{ row.petName }}
                   </span>
-                  <div v-if="row.missingPortions > 0" class="small text-muted mt-1">
-                    Bolsas incompletas
+                </div>
+              </div>
+              <div class="card-body p-3">
+                <div class="row mb-3">
+                  <div class="col-6">
+                    <small class="text-muted d-block">Porciones deseadas:</small>
+                    <input
+                      v-model.number="
+                        pets
+                          .find(p => p._id === row.petId)
+                          .ingredients.find(i => i.ingredient._id === row.ingredientId)
+                          .desiredPortions
+                      "
+                      type="number"
+                      min="0"
+                      class="form-control form-control-sm"
+                    />
                   </div>
-                </td>
-                <td>
-                  <strong>{{ row.totalPortions }}</strong>
-                  <div class="small text-muted">
-                    {{ row.desiredPortions }} deseadas + {{ row.missingPortions }} faltantes
+                  <div class="col-6">
+                    <small class="text-muted d-block">Total porciones:</small>
+                    <span class="fw-medium">{{ row.totalPortions }}</span>
+                    <div class="small text-muted">{{ row.desiredPortions }} + {{ row.missingPortions }}</div>
                   </div>
-                </td>
-                <td>
-                  <span v-if="row.kilos">
-                    <strong>{{ row.kilos.toFixed(2) }} kg</strong>
-                    <span class="text-muted small d-block">({{ row.totalGrams }} g)</span>
-                  </span>
-                  <span v-else><strong>{{ row.totalGrams }} g</strong></span>
-                </td>
-              </tr>
-            </tbody>
-          </table>
+                </div>
+                
+                <div class="text-center p-2 bg-light rounded">
+                  <div class="h5 mb-0">
+                    <span v-if="row.kilos">
+                      <strong class="text-success">{{ row.kilos.toFixed(2) }} kg</strong>
+                    </span>
+                    <span v-else>
+                      <strong class="text-success">{{ row.totalGrams }} g</strong>
+                    </span>
+                  </div>
+                  <small class="text-muted">Total a comprar</small>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
         <div class="d-flex justify-content-end mt-3" v-if="totals.length > 0">
           <button type="button" class="btn btn-primary" :disabled="saving" @click="savePortions">
@@ -282,38 +343,69 @@ onMounted(loadPets);
           Las porciones faltantes se calculan automáticamente basándose en las bolsas incompletas que necesitan ingredientes adicionales.
         </p>
         <div class="table-responsive">
-          <table class="table table-sm">
-            <thead>
-              <tr>
-                <th>Bolsa</th>
-                <th>Mascota</th>
-                <th>Cantidad</th>
-                <th>Ingredientes faltantes</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-for="bag in bags" :key="bag._id">
-                <td>{{ bag.name }}</td>
-                <td>{{ bag.pet?.name || 'Sin mascota' }}</td>
-                <td>{{ bag.quantity || 1 }}</td>
-                <td>
-                  <span v-if="bag.pet" class="small">
+          <!-- Vista desktop -->
+          <div class="d-none d-md-block">
+            <table class="table table-sm">
+              <thead>
+                <tr>
+                  <th>Bolsa</th>
+                  <th>Mascota</th>
+                  <th>Cantidad</th>
+                  <th>Ingredientes faltantes</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="bag in bags" :key="bag._id">
+                  <td>{{ bag.name }}</td>
+                  <td>{{ bag.pet?.name || 'Sin mascota' }}</td>
+                  <td>{{ bag.quantity || 1 }}</td>
+                  <td>
+                    <span v-if="bag.pet" class="small">
+                      <span 
+                        v-for="missing in getMissingIngredientsForBag(bag)" 
+                        :key="missing" 
+                        class="badge bg-light text-dark me-1"
+                      >
+                        {{ missing }}
+                      </span>
+                      <span v-if="getMissingIngredientsForBag(bag).length === 0" class="text-success">
+                        Ninguno (bolsa completa)
+                      </span>
+                    </span>
+                    <span v-else class="text-muted small">Sin mascota asignada</span>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          
+          <!-- Vista mobile compacta -->
+          <div class="d-md-none">
+            <div v-for="bag in bags" :key="bag._id" class="card mb-2">
+              <div class="card-body p-2">
+                <div class="d-flex justify-content-between align-items-start mb-2">
+                  <h6 class="mb-0 fw-medium">{{ bag.name }}</h6>
+                  <span class="badge bg-secondary">{{ bag.quantity || 1 }}</span>
+                </div>
+                <div v-if="bag.pet" class="small">
+                  <div class="text-muted mb-1">{{ bag.pet.name }} - Faltantes:</div>
+                  <div>
                     <span 
                       v-for="missing in getMissingIngredientsForBag(bag)" 
                       :key="missing" 
-                      class="badge bg-light text-dark me-1"
+                      class="badge bg-warning text-dark me-1 mb-1"
                     >
                       {{ missing }}
                     </span>
-                    <span v-if="getMissingIngredientsForBag(bag).length === 0" class="text-success">
-                      Ninguno (bolsa completa)
+                    <span v-if="getMissingIngredientsForBag(bag).length === 0" class="text-success small">
+                      ✓ Completa
                     </span>
-                  </span>
-                  <span v-else class="text-muted small">Sin mascota asignada</span>
-                </td>
-              </tr>
-            </tbody>
-          </table>
+                  </div>
+                </div>
+                <div v-else class="text-muted small">Sin mascota asignada</div>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     </div>

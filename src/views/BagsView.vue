@@ -33,7 +33,7 @@ const form = ref({
 // Ingredientes disponibles basados en la mascota selecionada
 const availableIngredients = computed(() => {
   if (!form.value.petId) return [];
-  
+
   const selectedPet = pets.value.find(p => p._id === form.value.petId);
   const ingredients = selectedPet?.ingredients || [];
   console.log('Available ingredients for pet', selectedPet?.name, ':', ingredients);
@@ -56,17 +56,17 @@ const updateSelectionsForPet = () => {
     form.value.selections = [];
     return;
   }
-  
+
   const selectedPet = pets.value.find(p => p._id === form.value.petId);
   const petIngredients = selectedPet?.ingredients || [];
   console.log('Updating selections for pet:', selectedPet?.name, 'ingredients:', petIngredients);
-  
+
   form.value.selections = petIngredients.map((i) => ({
     ingredientId: i.ingredient._id,
     selected: false,
     gramsPerBag: i.gramsPerPortion || 100,
   }));
-  
+
   console.log('New selections:', form.value.selections);
 };
 
@@ -158,11 +158,11 @@ const editBag = (bag) => {
   form.value.name = bag.name;
   form.value.quantity = bag.quantity;
   form.value.petId = bag.pet?._id || null;
-  
+
   // Obtener ingredientes de la mascota
   const selectedPet = pets.value.find(p => p._id === form.value.petId);
   const petIngredients = selectedPet?.ingredients || [];
-  
+
   form.value.selections = petIngredients.map((i) => {
     const found = bag.ingredients.find(
       (bi) => bi.ingredient && bi.ingredient._id === i.ingredient._id,
@@ -173,7 +173,7 @@ const editBag = (bag) => {
       gramsPerBag: found ? found.gramsPerBag : i.gramsPerPortion || 100,
     };
   });
-  
+
   success.value = '';
   error.value = '';
 };
@@ -225,7 +225,7 @@ onMounted(loadData);
       <div class="d-flex gap-2">
         <span v-if="form.petId" class="badge bg-success">
           <i class="bi bi-heart-fill me-1"></i>
-          Mascota: {{ pets.find(p => p._id === form.petId)?.name }} 
+          Mascota: {{ pets.find(p => p._id === form.petId)?.name }}
           (Máx. {{ maxIngredientsPerBag }} ingredientes)
         </span>
         <span v-else-if="maxIngredientsPerBag" class="badge bg-secondary">
@@ -236,7 +236,7 @@ onMounted(loadData);
     </div>
 
     <p class="text-muted small mb-3">
-      Define bolsas o platos incompletos indicando qué ingredientes llevan y en qué cantidad. 
+      Define bolsas o platos incompletos indicando qué ingredientes llevan y en qué cantidad.
       <strong>Selecciona una mascota</strong> para aplicar sus configuraciones específicas (máximo de ingredientes permitidos).
       Puedes marcar una bolsa como completada para actualizar tu inventario.
     </p>
@@ -381,7 +381,7 @@ onMounted(loadData);
                 <td>
                   <span v-if="bag.isComplete" class="badge bg-success">
                     <i class="bi bi-check-circle me-1"></i>
-                    Completada  
+                    Completada
                   </span>
                   <span v-else class="badge bg-warning text-dark">
                     <i class="bi bi-clock me-1"></i>

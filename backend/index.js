@@ -51,6 +51,10 @@ app.use(
   }),
 );
 
+// Middleware para parsear JSON - NECESARIO para que req.body funcione
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+
 // Middleware adicional para manejar preflight requests manualmente si es necesario
 app.options('*', (req, res) => {
   console.log('Manual OPTIONS request handled for:', req.path);

@@ -3,11 +3,14 @@ import { onMounted, ref } from 'vue';
 import api from '../api/client.js';
 
 const pets = ref([]);
+const ingredients = ref([]);
 const loading = ref(false);
 const saving = ref(false);
 const feedingLoading = ref(false);
 const editingInventory = ref(null);
 const tempInventory = ref(0);
+const managingIngredients = ref(null);
+const petIngredients = ref([]);
 const error = ref('');
 const success = ref('');
 
@@ -40,6 +43,14 @@ const loadPets = async () => {
     error.value = e.message || 'No se pudieron cargar las mascotas';
   } finally {
     loading.value = false;
+  }
+};
+
+const loadIngredients = async () => {
+  try {
+    ingredients.value = await api.get('/ingredients');
+  } catch (e) {
+    console.error('No se pudieron cargar los ingredientes:', e);
   }
 };
 
@@ -156,7 +167,69 @@ const deletePet = async (pet) => {
   }
 };
 
-onMounted(loadPets);
+const startManageIngredients = async (pet) => {
+  try {
+    managingIngredients.value = pet._id;
+    const existingIngredients = await api.get(`/pets/${pet._id}/ingredients`);
+    console.log('Ingredientes existentes para', pet.name, ':', existingIngredients);
+    
+    // Crear array con todos los ingredientes y marcar cuáles están asociados
+    petIngredients.value = ingredients.value.map(ing => {
+      const existing = existingIngredients.find(ei => ei.ingredient._id === ing._id);
+      return {
+        ingredientId: ing._id,
+        name: ing.name,
+        selected: !!existing,
+        gramsPerPortion: existing ? existing.gramsPerPortion : 100,
+        desiredPortions: existing ? existing.desiredPortions || 0 : 0
+      };
+    });
+    console.log('Ingredientes preparados para el modal:', petIngredients.value);
+  } catch (e) {
+    error.value = e.message || 'No se pudieron cargar los ingredientes de la mascota';
+  }
+};
+
+const savePetIngredients = async () => {
+  try {
+    const selectedIngredients = petIngredients.value
+      .filter(pi => pi.selected)
+      .map(pi => ({
+        ingredient: pi.ingredientId,
+        gramsPerPortion: pi.gramsPerPortion,
+        desiredPortions: pi.desiredPortions || 0
+      }));
+    
+    console.log('Guardando ingredientes para mascota:', managingIngredients.value);
+    console.log('Ingredientes seleccionados:', selectedIngredients);
+    
+    const result = await api.put(`/pets/${managingIngredients.value}/ingredients`, {
+      ingredients: selectedIngredients
+    });
+    
+    console.log('Resultado del guardado:', result);
+    
+    success.value = 'Ingredientes de la mascota actualizados correctamente';
+    managingIngredients.value = null;
+    error.value = '';
+    
+    // Recargar mascotas para mostrar los cambios actualizados
+    await loadPets();
+  } catch (e) {
+    console.error('Error guardando ingredientes:', e);
+    error.value = e.message || 'No se pudieron guardar los ingredientes';
+  }
+};
+
+const cancelManageIngredients = () => {
+  managingIngredients.value = null;
+  petIngredients.value = [];
+};
+
+onMounted(() => {
+  loadPets();
+  loadIngredients();
+});
 </script>
 
 <template>
@@ -265,6 +338,7 @@ onMounted(loadPets);
                 <th>Máx. ingredientes</th>
                 <th>Inventario Total</th>
                 <th>Días de comida</th>
+                <th>Ingredientes</th>
                 <th>Acciones</th>
               </tr>
             </thead>
@@ -321,6 +395,25 @@ onMounted(loadPets);
                   <span v-else class="text-muted small">Sin comidas/día</span>
                 </td>
                 <td>
+                  <div class="d-flex align-items-center gap-2">
+                    <div>
+                      <small class="text-muted">
+                        {{ pet.ingredients?.length || 0 }} ingrediente{{ (pet.ingredients?.length || 0) !== 1 ? 's' : '' }}
+                      </small>
+                      <div v-if="pet.ingredients?.length" class="small text-success">
+                        {{ pet.ingredients.map(i => i.ingredient?.name || 'N/A').join(', ') }}
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      class="btn btn-outline-info btn-sm"
+                      @click="startManageIngredients(pet)"
+                    >
+                      Gestionar
+                    </button>
+                  </div>
+                </td>
+                <td>
                   <button
                     type="button"
                     class="btn btn-outline-secondary btn-sm me-2"
@@ -347,6 +440,59 @@ onMounted(loadPets);
               </tr>
             </tbody>
           </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- Modal para gestionar ingredientes de mascota -->
+    <div v-if="managingIngredients" class="modal d-block" style="background: rgba(0,0,0,0.5);">
+      <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title">Gestionar ingredientes de la mascota</h5>
+            <button type="button" class="btn-close" @click="cancelManageIngredients"></button>
+          </div>
+          <div class="modal-body">
+            <p class="text-muted ">Selecciona los ingredientes que forman parte de la dieta de esta mascota y define la cantidad en gramos por porción.</p>
+            <div v-if="petIngredients.length === 0" class="text-muted">
+              No hay ingredientes disponibles. Crea algunos ingredientes primero.
+            </div>
+            <div v-else>
+              <div v-for="ing in petIngredients" :key="ing.ingredientId" class="row mb-3 align-items-center border-bottom pb-2">
+                <div class="col-md-1">
+                  <input 
+                    type="checkbox" 
+                    class="form-check-input"
+                    v-model="ing.selected"
+                  >
+                </div>
+                <div class="col-md-5">
+                  <strong>{{ ing.name }}</strong>
+                </div>
+                <div class="col-md-6">
+                  <div class="input-group input-group-sm">
+                    <input 
+                      type="number" 
+                      class="form-control"
+                      v-model.number="ing.gramsPerPortion"
+                      min="1"
+                      :disabled="!ing.selected"
+                      placeholder="Gramos por porción"
+                    >
+                    <span class="input-group-text">g</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" @click="cancelManageIngredients">
+              Cancelar
+            </button>
+            <button type="button" class="btn btn-primary" @click="savePetIngredients">
+              Guardar ingredientes
+            </button>
+          </div>
         </div>
       </div>
     </div>

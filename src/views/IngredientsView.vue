@@ -12,7 +12,6 @@ const form = ref({
   id: null,
   name: '',
   code: '',
-  gramsPerPortion: 100,
 });
 
 const resetForm = () => {
@@ -20,7 +19,6 @@ const resetForm = () => {
     id: null,
     name: '',
     code: '',
-    gramsPerPortion: 100,
   };
 };
 
@@ -41,14 +39,13 @@ const onSubmit = async () => {
   success.value = '';
   saving.value = true;
   try {
-    if (!form.value.name || !form.value.code || !form.value.gramsPerPortion) {
-      error.value = 'Nombre, código y gramos por porción son obligatorios';
+    if (!form.value.name || !form.value.code) {
+      error.value = 'Nombre y código son obligatorios';
       return;
     }
     const payload = {
       name: form.value.name,
       code: form.value.code,
-      gramsPerPortion: Number(form.value.gramsPerPortion),
     };
     if (form.value.id) {
       const updated = await api.put(`/ingredients/${form.value.id}`, payload);
@@ -74,7 +71,6 @@ const editIngredient = (ingredient) => {
     id: ingredient._id,
     name: ingredient.name,
     code: ingredient.code,
-    gramsPerPortion: ingredient.gramsPerPortion,
   };
   success.value = '';
   error.value = '';
@@ -106,8 +102,7 @@ onMounted(loadIngredients);
     </div>
 
     <p class="text-muted small mb-3">
-      Gestiona los ingredientes disponibles, su código interno y los gramos por porción usados para
-      los cálculos de compra.
+      Gestiona los ingredientes disponibles y su código interno.
     </p>
 
     <div v-if="error" class="alert alert-danger py-2">{{ error }}</div>
@@ -119,7 +114,7 @@ onMounted(loadIngredients);
           {{ form.id ? 'Editar ingrediente' : 'Nuevo ingrediente' }}
         </h3>
         <form @submit.prevent="onSubmit" class="row g-3">
-          <div class="col-md-4">
+          <div class="col-md-5">
             <label class="form-label">Nombre</label>
             <input
               v-model="form.name"
@@ -129,7 +124,7 @@ onMounted(loadIngredients);
               placeholder="Ej: Pollo"
             />
           </div>
-          <div class="col-md-4">
+          <div class="col-md-5">
             <label class="form-label">Código interno</label>
             <input
               v-model="form.code"
@@ -139,17 +134,7 @@ onMounted(loadIngredients);
               placeholder="Ej: POLLO"
             />
           </div>
-          <div class="col-md-3">
-            <label class="form-label">Gramos por porción</label>
-            <input
-              v-model.number="form.gramsPerPortion"
-              type="number"
-              min="1"
-              class="form-control"
-              required
-            />
-          </div>
-          <div class="col-md-1 d-flex align-items-end">
+          <div class="col-md-2 d-flex align-items-end">
             <button type="submit" class="btn btn-primary w-100" :disabled="saving">
               <span v-if="saving" class="spinner-border spinner-border-sm me-1" />
               {{ form.id ? 'Guardar' : 'Añadir' }}
@@ -174,7 +159,6 @@ onMounted(loadIngredients);
               <tr>
                 <th>Nombre</th>
                 <th>Código</th>
-                <th>Gramos por porción</th>
                 <th>Acciones</th>
               </tr>
             </thead>
@@ -182,7 +166,6 @@ onMounted(loadIngredients);
               <tr v-for="ingredient in ingredients" :key="ingredient._id">
                 <td>{{ ingredient.name }}</td>
                 <td>{{ ingredient.code }}</td>
-                <td>{{ ingredient.gramsPerPortion }} g</td>
                 <td>
                   <button
                     type="button"

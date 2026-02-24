@@ -155,7 +155,9 @@ async function applyInventoryAutoUpdateForPet(pet, userId) {
 // aplica el rebajo automático de bolsas según comidas/hora y última actualización
 router.get('/', async (req, res, next) => {
   try {
-    const pets = await Pet.find({ user: req.user._id }).sort({ createdAt: -1 });
+    const pets = await Pet.find({ user: req.user._id })
+      .populate('ingredients.ingredient')
+      .sort({ createdAt: -1 });
 
     for (const pet of pets) {
       await applyInventoryAutoUpdateForPet(pet, req.user._id);
@@ -352,6 +354,56 @@ router.delete('/:id', async (req, res, next) => {
     await Bag.updateMany({ user: req.user._id, pet: pet._id }, { $unset: { pet: '' } });
 
     res.status(204).send();
+  } catch (error) {
+    next(error);
+  }
+});
+
+// Obtiene los ingredientes asociados a una mascota con sus cantidades
+router.get('/:id/ingredients', async (req, res, next) => {
+  try {
+    const pet = await Pet.findOne({ _id: req.params.id, user: req.user._id })
+      .populate('ingredients.ingredient');
+    if (!pet) {
+      return res.status(404).json({ message: 'Mascota no encontrada' });
+    }
+    res.json(pet.ingredients);
+  } catch (error) {
+    next(error);
+  }
+});
+
+// Actualiza los ingredientes asociados a una mascota
+router.put('/:id/ingredients', async (req, res, next) => {
+  try {
+    const { ingredients } = req.body;
+    
+    if (!Array.isArray(ingredients)) {
+      return res.status(400).json({ message: 'Los ingredientes deben ser un array' });
+    }
+
+    // Validar que cada ingrediente tenga los campos requeridos
+    for (const ing of ingredients) {
+      if (!ing.ingredient || !ing.gramsPerPortion || ing.gramsPerPortion < 1) {
+        return res.status(400).json({ 
+          message: 'Cada ingrediente debe tener un ID válido y gramos por porción >= 1' 
+        });
+      }
+      // Asegurar que desiredPortions esté definido
+      ing.desiredPortions = ing.desiredPortions || 0;
+    }
+
+    const pet = await Pet.findOneAndUpdate(
+      { _id: req.params.id, user: req.user._id },
+      { ingredients },
+      { returnDocument: 'after', runValidators: true }
+    ).populate('ingredients.ingredient');
+
+    if (!pet) {
+      return res.status(404).json({ message: 'Mascota no encontrada' });
+    }
+
+    res.json(pet.ingredients);
   } catch (error) {
     next(error);
   }

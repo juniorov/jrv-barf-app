@@ -218,7 +218,6 @@ Respuesta:
     "user": "mongoUserId",
     "name": "Pollo",
     "code": "POLLO",
-    "gramsPerPortion": 100,
     "desiredPortions": 0
   }
 ]
@@ -234,7 +233,6 @@ Body:
 {
   "name": "Pollo",
   "code": "POLLO",
-  "gramsPerPortion": 100,
   "desiredPortions": 0
 }
 ```
@@ -243,7 +241,6 @@ Respuesta (201): ingrediente creado.
 
 Restricciones:
 - `code` es único por usuario (`user + code`).
-- `gramsPerPortion` mínimo 1.
 - `desiredPortions` mínimo 0.
 
 #### Editar ingrediente
@@ -256,7 +253,6 @@ Body (se envía el objeto completo):
 {
   "name": "Pollo",
   "code": "POLLO",
-  "gramsPerPortion": 120,
   "desiredPortions": 10
 }
 ```
@@ -340,7 +336,110 @@ Respuesta: bolsa actualizada.
 
 ---
 
-### 7.5 Configuración (requiere token)
+### 7.5 Mascotas (requiere token)
+
+#### Listar mascotas
+
+**GET** `/pets`
+
+Respuesta:
+
+```json
+[
+  {
+    "_id": "mongoId",
+    "user": "mongoUserId",
+    "name": "Rocky",
+    "age": 3,
+    "ingredients": [
+      {
+        "ingredient": {
+          "_id": "ingredientId",
+          "name": "Pollo",
+          "code": "POLLO"
+        },
+        "gramsPerPortion": 150
+      }
+    ],
+    "mealsPerDay": 2,
+    "maxIngredientsPerBag": 5,
+    "totalInventory": 10,
+    "feedingTimes": ["08:00", "20:00"]
+  }
+]
+```
+
+#### Crear mascota
+
+**POST** `/pets`
+
+Body:
+
+```json
+{
+  "name": "Rocky",
+  "age": 3,
+  "mealsPerDay": 2,
+  "maxIngredientsPerBag": 5,
+  "feedingTimes": ["08:00", "20:00"]
+}
+```
+
+Respuesta (201): mascota creada.
+
+#### Editar mascota
+
+**PUT** `/pets/:id`
+
+Body: igual a crear.
+
+#### Eliminar mascota
+
+**DELETE** `/pets/:id`
+
+Respuesta (204).
+
+#### Obtener ingredientes de una mascota
+
+**GET** `/pets/:id/ingredients`
+
+Respuesta:
+
+```json
+[
+  {
+    "ingredient": {
+      "_id": "ingredientId",
+      "name": "Pollo",
+      "code": "POLLO"
+    },
+    "gramsPerPortion": 150
+  }
+]
+```
+
+#### Actualizar ingredientes de una mascota
+
+**PUT** `/pets/:id/ingredients`
+
+Body:
+
+```json
+{
+  "ingredients": [
+    {
+      "ingredient": "ingredientMongoId",
+      "gramsPerPortion": 150
+    }
+  ]
+}
+```
+
+Respuesta: ingredientes actualizados de la mascota.
+
+---
+
+### 7.6 Configuración (requiere token)
 
 #### Ver configuración
 

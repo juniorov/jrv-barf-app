@@ -30,18 +30,44 @@ const form = ref({
   selections: [],
 });
 
+// Ingredientes disponibles basados en la mascota selecionada
+const availableIngredients = computed(() => {
+  if (!form.value.petId) return [];
+  
+  const selectedPet = pets.value.find(p => p._id === form.value.petId);
+  const ingredients = selectedPet?.ingredients || [];
+  console.log('Available ingredients for pet', selectedPet?.name, ':', ingredients);
+  return ingredients;
+});
+
 const resetForm = () => {
   form.value = {
     id: null,
     name: '',
     quantity: 1,
     petId: null,
-    selections: ingredients.value.map((i) => ({
-      ingredientId: i._id,
-      selected: false,
-      gramsPerBag: i.gramsPerPortion || 0,
-    })),
+    selections: [],
   };
+};
+
+// Actualizar selections cuando cambia la mascota
+const updateSelectionsForPet = () => {
+  if (!form.value.petId) {
+    form.value.selections = [];
+    return;
+  }
+  
+  const selectedPet = pets.value.find(p => p._id === form.value.petId);
+  const petIngredients = selectedPet?.ingredients || [];
+  console.log('Updating selections for pet:', selectedPet?.name, 'ingredients:', petIngredients);
+  
+  form.value.selections = petIngredients.map((i) => ({
+    ingredientId: i.ingredient._id,
+    selected: false,
+    gramsPerBag: i.gramsPerPortion || 100,
+  }));
+  
+  console.log('New selections:', form.value.selections);
 };
 
 const loadData = async () => {
@@ -56,6 +82,7 @@ const loadData = async () => {
     ingredients.value = ing;
     pets.value = ps;
     bags.value = bs.filter((b) => !b.isCompleted);
+    console.log('Mascotas cargadas:', pets.value);
     resetForm();
   } catch (e) {
     error.value = e.message || 'No se pudieron cargar las bolsas o ingredientes';
@@ -75,6 +102,11 @@ const onSubmit = async () => {
   try {
     if (!form.value.name || !form.value.quantity) {
       error.value = 'Nombre y cantidad son obligatorios';
+      return;
+    }
+
+    if (!form.value.petId) {
+      error.value = 'Debes seleccionar una mascota';
       return;
     }
 
@@ -126,16 +158,22 @@ const editBag = (bag) => {
   form.value.name = bag.name;
   form.value.quantity = bag.quantity;
   form.value.petId = bag.pet?._id || null;
-  form.value.selections = ingredients.value.map((i) => {
+  
+  // Obtener ingredientes de la mascota
+  const selectedPet = pets.value.find(p => p._id === form.value.petId);
+  const petIngredients = selectedPet?.ingredients || [];
+  
+  form.value.selections = petIngredients.map((i) => {
     const found = bag.ingredients.find(
-      (bi) => bi.ingredient && bi.ingredient._id === i._id,
+      (bi) => bi.ingredient && bi.ingredient._id === i.ingredient._id,
     );
     return {
-      ingredientId: i._id,
+      ingredientId: i.ingredient._id,
       selected: !!found,
-      gramsPerBag: found ? found.gramsPerBag : i.gramsPerPortion || 0,
+      gramsPerBag: found ? found.gramsPerBag : i.gramsPerPortion || 100,
     };
   });
+  
   success.value = '';
   error.value = '';
 };
@@ -234,7 +272,7 @@ onMounted(loadData);
           </div>
           <div class="col-md-3">
             <label class="form-label">Mascota</label>
-            <select v-model="form.petId" class="form-select">
+            <select v-model="form.petId" class="form-select" @change="updateSelectionsForPet">
               <option :value="null">Sin mascota asociada</option>
               <option v-for="pet in pets" :key="pet._id" :value="pet._id">
                 {{ pet.name }} ({{ pet.age }} años)
@@ -248,7 +286,13 @@ onMounted(loadData);
                 Seleccionados: {{ selectedCount }} / {{ maxIngredientsPerBag }}
               </span>
             </label>
-            <div class="table-responsive">
+            <div v-if="!form.petId" class="alert alert-info py-2 small">
+              Selecciona una mascota para ver sus ingredientes disponibles.
+            </div>
+            <div v-else-if="availableIngredients.length === 0" class="alert alert-warning py-2 small">
+              La mascota seleccionada no tiene ingredientes asignados. Ve a la sección de Mascotas para asignar ingredientes.
+            </div>
+            <div v-else class="table-responsive">
               <table class="table table-sm align-middle mb-0">
                 <thead>
                   <tr>
@@ -268,8 +312,8 @@ onMounted(loadData);
                     </td>
                     <td>
                       {{
-                        ingredients.find((i) => i._id === selection.ingredientId)?.name ||
-                        'Ingrediente'
+                        availableIngredients.find((i) => i.ingredient._id === selection.ingredientId)?.ingredient?.name ||
+                        'Ingrediente no encontrado'
                       }}
                     </td>
                     <td>
@@ -287,7 +331,7 @@ onMounted(loadData);
             </div>
           </div>
           <div class="col-12 d-flex justify-content-end">
-            <button type="submit" class="btn btn-primary" :disabled="saving || !ingredients.length">
+            <button type="submit" class="btn btn-primary" :disabled="saving || !form.petId">
               <span v-if="saving" class="spinner-border spinner-border-sm me-1" />
               {{ form.id ? 'Guardar cambios' : 'Crear bolsa' }}
             </button>

@@ -2,19 +2,19 @@
 import { onMounted, ref, computed } from 'vue';
 import api from '../api/client.js';
 
-const ingredients = ref([]);
+const pets = ref([]);
 const loading = ref(false);
 const saving = ref(false);
 const error = ref('');
 const success = ref('');
 
-const loadIngredients = async () => {
+const loadPets = async () => {
   loading.value = true;
   error.value = '';
   try {
-    ingredients.value = await api.get('/ingredients');
+    pets.value = await api.get('/pets');
   } catch (e) {
-    error.value = e.message || 'No se pudieron cargar los ingredientes';
+    error.value = e.message || 'No se pudieron cargar las mascotas';
   } finally {
     loading.value = false;
   }
@@ -25,51 +25,69 @@ const savePortions = async () => {
   success.value = '';
   saving.value = true;
   try {
-    const updates = ingredients.value.map((i) =>
-      api.put(`/ingredients/${i._id}`, {
-        name: i.name,
-        code: i.code,
-        gramsPerPortion: i.gramsPerPortion,
-        desiredPortions: i.desiredPortions || 0,
-      }),
-    );
+    const updates = [];
+    
+    for (const pet of pets.value) {
+      if (pet.ingredients && pet.ingredients.length > 0) {
+        updates.push(
+          api.put(`/pets/${pet._id}/ingredients`, {
+            ingredients: pet.ingredients.map(ing => ({
+              ingredient: ing.ingredient._id,
+              gramsPerPortion: ing.gramsPerPortion
+            }))
+          })
+        );
+      }
+    }
+    
     await Promise.all(updates);
-    success.value = 'Porciones deseadas guardadas correctamente';
+    success.value = 'Cantidades por porción guardadas correctamente';
   } catch (e) {
-    error.value = e.message || 'No se pudieron guardar las porciones';
+    error.value = e.message || 'No se pudieron guardar las cantidades';
   } finally {
     saving.value = false;
   }
 };
 
-const totals = computed(() =>
-  ingredients.value.map((i) => {
-    const desired = Number(i.desiredPortions || 0);
-    const perPortion = Number(i.gramsPerPortion || 0);
-    const totalGrams = desired * perPortion;
-    const kilos = totalGrams >= 1000 ? totalGrams / 1000 : 0;
-    return {
-      id: i._id,
-      name: i.name,
-      desiredPortions: desired,
-      gramsPerPortion: perPortion,
-      totalGrams,
-      kilos,
-    };
-  }),
-);
+const totals = computed(() => {
+  const result = [];
+  
+  pets.value.forEach(pet => {
+    if (pet.ingredients && pet.ingredients.length > 0) {
+      pet.ingredients.forEach(ing => {
+        const desired = Number(ing.desiredPortions || 0);
+        const gramsPerPortion = Number(ing.gramsPerPortion || 0);
+        const totalGrams = desired * gramsPerPortion;
+        const kilos = totalGrams >= 1000 ? totalGrams / 1000 : 0;
+        
+        result.push({
+          petId: pet._id,
+          petName: pet.name,
+          ingredientId: ing.ingredient._id,
+          ingredientName: ing.ingredient.name,
+          desiredPortions: desired,
+          gramsPerPortion,
+          totalGrams,
+          kilos
+        });
+      });
+    }
+  });
+  
+  return result;
+});
 
-onMounted(loadIngredients);
+onMounted(loadPets);
 </script>
 
 <template>
   <div>
     <div class="d-flex justify-content-between align-items-center mb-3">
-      <h2 class="h4 mb-0">Porciones deseadas y cantidades a comprar</h2>
+      <h2 class="h4 mb-0">Porciones por mascota y cantidades a comprar</h2>
     </div>
 
     <p class="text-muted small mb-3">
-      Indica cuántas porciones deseas preparar de cada ingrediente. La aplicación calcula los gramos
+      Indica cuántas porciones deseas preparar de cada ingrediente por mascota. La aplicación calcula los gramos
       y convierte automáticamente a kilogramos cuando corresponde.
     </p>
 
@@ -78,10 +96,17 @@ onMounted(loadIngredients);
 
     <div class="card">
       <div class="card-body">
-        <div class="table-responsive">
+        <div v-if="!pets.length && !loading" class="text-muted small">
+          No hay mascotas aún. Crea mascotas y asigna ingredientes en la sección de Mascotas.
+        </div>
+        <div v-else-if="totals.length === 0 && !loading" class="text-muted small">
+          Las mascotas no tienen ingredientes asignados. Ve a la sección de Mascotas para asignar ingredientes.
+        </div>
+        <div class="table-responsive" v-else>
           <table class="table table-sm align-middle">
             <thead>
               <tr>
+                <th>Mascota</th>
                 <th>Ingrediente</th>
                 <th>Gramos por porción</th>
                 <th>Porciones deseadas</th>
@@ -89,13 +114,17 @@ onMounted(loadIngredients);
               </tr>
             </thead>
             <tbody>
-              <tr v-for="row in totals" :key="row.id">
-                <td>{{ row.name }}</td>
+              <tr v-for="row in totals" :key="`${row.petId}-${row.ingredientId}`">
+                <td>{{ row.petName }}</td>
+                <td>{{ row.ingredientName }}</td>
                 <td>{{ row.gramsPerPortion }} g</td>
                 <td style="max-width: 120px;">
                   <input
                     v-model.number="
-                      ingredients.find((i) => i._id === row.id).desiredPortions
+                      pets
+                        .find(p => p._id === row.petId)
+                        .ingredients.find(i => i.ingredient._id === row.ingredientId)
+                        .desiredPortions
                     "
                     type="number"
                     min="0"
@@ -113,7 +142,7 @@ onMounted(loadIngredients);
             </tbody>
           </table>
         </div>
-        <div class="d-flex justify-content-end mt-3">
+        <div class="d-flex justify-content-end mt-3" v-if="totals.length > 0">
           <button type="button" class="btn btn-primary" :disabled="saving" @click="savePortions">
             <span v-if="saving" class="spinner-border spinner-border-sm me-1" />
             Guardar porciones

@@ -4,6 +4,7 @@ import Ingredient from '../models/Ingredient.js';
 import Pet from '../models/Pet.js';
 import ConsumptionHistory from '../models/ConsumptionHistory.js';
 import { authRequired } from '../middleware/auth.js';
+import { applyInventoryAutoUpdateForPet } from './pet.routes.js';
 
 // Rutas para gestionar las bolsas o platos incompletos
 const router = Router();
@@ -15,6 +16,12 @@ router.use(authRequired);
 // Opcionalmente se puede filtrar por mascota con query ?pet=<petId>
 router.get('/', async (req, res, next) => {
   try {
+    // Aplicar rebajo automático para todas las mascotas del usuario antes de mostrar bolsas
+    const userPets = await Pet.find({ user: req.user._id });
+    for (const pet of userPets) {
+      await applyInventoryAutoUpdateForPet(pet, req.user._id);
+    }
+
     const filter = { user: req.user._id };
     if (req.query.pet) {
       filter.pet = req.query.pet;

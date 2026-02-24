@@ -2,6 +2,7 @@ import { Router } from 'express';
 import Pet from '../models/Pet.js';
 import Bag from '../models/Bag.js';
 import ConsumptionHistory from '../models/ConsumptionHistory.js';
+import User from '../models/User.js';  // Añadir importación para el endpoint del sistema
 import { authRequired } from '../middleware/auth.js';
 
 // Rutas para gestionar las mascotas del usuario (nombre, edad, comidas y consumo automático)
@@ -13,13 +14,14 @@ router.use(authRequired);
 // Calcula cuántas comidas deberían haberse hecho desde lastInventoryUpdate hasta ahora,
 // usando las feedingTimes si están definidas. Si no hay feedingTimes, se usa un consumo
 // de mealsPerDay por día completo transcurrido.
-async function applyInventoryAutoUpdateForPet(pet, userId) {
+// IMPORTANTE: Verifica registros manuales existentes para evitar doble rebajo
+export async function applyInventoryAutoUpdateForPet(pet, userId) {
   const now = new Date();
   const last = pet.lastInventoryUpdate || pet.createdAt || now;
 
   // Nada que hacer si last es en el futuro o no hay comidas configuradas
-  if (now <= last || !pet.mealsPerDay || pet.mealsPerDay <= 0) {
-    return;
+  if (now <= last || !pet.mealsPerDay || pet.mealsPerDay <= 0 || pet.totalInventory <= 0) {
+    return { consumed: 0, reason: 'No inventory or meals configured' };
   }
 
   let totalMealsToConsume = 0;
@@ -35,9 +37,24 @@ async function applyInventoryAutoUpdateForPet(pet, userId) {
     const diffMs = nowDay - lastDay;
     const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
     if (diffDays <= 0) {
-      return;
+      return { consumed: 0, reason: 'No full days elapsed' };
     }
     totalMealsToConsume = diffDays * pet.mealsPerDay;
+    
+    // Verificar si ya existen rebajos manuales en este período para evitar duplicación
+    const startDate = new Date(lastDay);
+    const endDate = new Date(nowDay);
+    const manualConsumptions = await ConsumptionHistory.find({
+      user: userId,
+      pet: pet._id,
+      consumptionType: 'manual',
+      consumptionDate: { $gte: startDate, $lt: endDate }
+    });
+    
+    // Reducir las comidas ya consumidas manualmente
+    const manualMealsConsumed = manualConsumptions.reduce((total, record) => total + (record.bagsConsumed || 0), 0);
+    totalMealsToConsume = Math.max(0, totalMealsToConsume - manualMealsConsumed);
+    
   } else {
     // Modo detallado: contar cada comida programada (HH:mm) entre last y now
     const parsedTimes = feedingTimes
@@ -50,13 +67,14 @@ async function applyInventoryAutoUpdateForPet(pet, userId) {
       .sort((a, b) => a.h - b.h || a.m - b.m);
 
     if (parsedTimes.length === 0) {
-      return;
+      return { consumed: 0, reason: 'Invalid feeding times format' };
     }
 
     const cursor = new Date(last);
     const end = now;
+    const mealEvents = [];
 
-    // Empezamos desde el día de last hasta el día de now
+    // Recopilar todos los eventos de comida que deberían haber ocurrido
     let day = new Date(
       cursor.getFullYear(),
       cursor.getMonth(),
@@ -76,84 +94,118 @@ async function applyInventoryAutoUpdateForPet(pet, userId) {
           0,
         );
         if (event > last && event <= end) {
-          totalMealsToConsume += 1;
+          mealEvents.push(event);
         }
       }
       day.setDate(day.getDate() + 1);
     }
-
-    if (totalMealsToConsume <= 0) {
-      return;
+    
+    totalMealsToConsume = mealEvents.length;
+    
+    // Verificar rebajos manuales para los días que contienen estos eventos
+    if (mealEvents.length > 0) {
+      const firstEventDate = new Date(mealEvents[0].getFullYear(), mealEvents[0].getMonth(), mealEvents[0].getDate());
+      const lastEventDate = new Date(mealEvents[mealEvents.length - 1].getFullYear(), mealEvents[mealEvents.length - 1].getMonth(), mealEvents[mealEvents.length - 1].getDate());
+      
+      const manualConsumptions = await ConsumptionHistory.find({
+        user: userId,
+        pet: pet._id,
+        consumptionType: 'manual', 
+        consumptionDate: { $gte: firstEventDate, $lte: lastEventDate }
+      });
+      
+      // Reducir las comidas ya consumidas manualmente
+      const manualMealsConsumed = manualConsumptions.reduce((total, record) => total + (record.bagsConsumed || 0), 0);
+      totalMealsToConsume = Math.max(0, totalMealsToConsume - manualMealsConsumed);
     }
   }
 
   if (totalMealsToConsume <= 0) {
-    return;
+    return { consumed: 0, reason: 'No meals to consume after checking manual consumption' };
   }
 
-  let remainingToConsume = totalMealsToConsume;
+  // Limitar el consumo al inventario disponible
+  const mealsToConsume = Math.min(totalMealsToConsume, pet.totalInventory);
+  
+  if (mealsToConsume <= 0) {
+    return { consumed: 0, reason: 'No inventory available' };
+  }
 
-  // Obtenemos todas las bolsas COMPLETADAS para esta mascota y usuario
-  const bags = await Bag.find({
+  // Reducir del inventario total de la mascota
+  const oldInventory = pet.totalInventory;
+  pet.totalInventory -= mealsToConsume;
+  pet.consumedCount = (pet.consumedCount || 0) + mealsToConsume;
+  
+  // Actualizar la fecha de última actualización
+  pet.lastInventoryUpdate = now;
+  await pet.save();
+
+  // Crear registro en el historial de consumo
+  // Buscar una bolsa representativa para obtener los ingredientes
+  const representativeBag = await Bag.findOne({
     user: userId,
     pet: pet._id,
-    completedCount: { $gt: 0 },
-  }).populate('ingredients.ingredient').sort({ createdAt: 1 });
+    isComplete: true
+  }).populate('ingredients.ingredient');
 
-  // Crear fecha sin hora para el registro de consumo (solo día)
-  const consumptionDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-
-  for (const bag of bags) {
-    if (remainingToConsume <= 0) break;
-    const available = bag.completedCount - (bag.consumedCount || 0);
-    if (available <= 0) continue;
-
-    const consume = Math.min(available, remainingToConsume);
-    bag.consumedCount = (bag.consumedCount || 0) + consume;
-    remainingToConsume -= consume;
-    await bag.save();
-
-    // Registrar el consumo en el historial para cada ingrediente de la bolsa
-    for (const ingredientBag of bag.ingredients) {
+  if (representativeBag && representativeBag.ingredients) {
+    // Crear fecha sin hora para el registro de consumo (solo día)
+    const consumptionDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    
+    for (const ingredientBag of representativeBag.ingredients) {
       // Validar valores para evitar NaN
       const gramsPerBag = Number(ingredientBag.gramsPerBag) || 0;
-      const gramsConsumed = gramsPerBag * consume;
+      const gramsConsumed = gramsPerBag * mealsToConsume;
       
       // Solo crear registro si tenemos valores válidos
       if (gramsConsumed > 0 && ingredientBag.ingredient && ingredientBag.ingredient._id) {
-        // Buscar si ya existe un registro para este día, mascota e ingrediente
+        // Buscar si ya existe un registro automático para este día, mascota e ingrediente
         const existingHistory = await ConsumptionHistory.findOne({
           user: userId,
           pet: pet._id,
           ingredient: ingredientBag.ingredient._id,
-          consumptionDate: consumptionDate
+          consumptionDate: consumptionDate,
+          consumptionType: 'automatic'
         });
 
         if (existingHistory) {
           // Actualizar el registro existente
           existingHistory.gramsConsumed += gramsConsumed;
-          existingHistory.bagsConsumed += consume;
+          existingHistory.bagsConsumed += mealsToConsume;
           await existingHistory.save();
         } else {
-          // Crear nuevo registro
-          await ConsumptionHistory.create({
+          // Crear nuevo registro (solo si no hay registro manual para evitar duplicidad)
+          const manualRecord = await ConsumptionHistory.findOne({
             user: userId,
             pet: pet._id,
             ingredient: ingredientBag.ingredient._id,
-            bag: bag._id,
-            gramsConsumed: gramsConsumed,
-            bagsConsumed: consume,
-            consumptionDate,
-            consumptionType: 'automatic'
+            consumptionDate: consumptionDate,
+            consumptionType: 'manual'
           });
+          
+          if (!manualRecord) {
+            await ConsumptionHistory.create({
+              user: userId,
+              pet: pet._id,
+              ingredient: ingredientBag.ingredient._id,
+              bag: representativeBag._id,
+              gramsConsumed: gramsConsumed,
+              bagsConsumed: mealsToConsume,
+              consumptionDate,
+              consumptionType: 'automatic'
+            });
+          }
         }
       }
     }
   }
 
-  // Actualizamos la fecha de última actualización de inventario
-  pet.lastInventoryUpdate = now;
-  await pet.save();
+  return {
+    consumed: mealsToConsume,
+    oldInventory,
+    newInventory: pet.totalInventory,
+    reason: `Consumed ${mealsToConsume} meals based on feeding schedule (excluded manual entries)`
+  };
 }
 
 // Devuelve todas las mascotas del usuario autenticado y, antes,
@@ -325,6 +377,119 @@ router.post('/:id/feed-day', async (req, res, next) => {
       mealsRequested: meals,
       mealsConsumed: meals,
       remainingInventory: pet.totalInventory
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// Endpoint para automatización (cron job) - rebaja inventario de todos los usuarios
+// Se puede configurar para ejecutarse a medianoche
+router.post('/system/auto-inventory-update', async (req, res, next) => {
+  try {
+    // Este endpoint no requiere autenticación ya que es para sistema
+    // Pero puedes añadir un token de sistema para seguridad
+    const { systemToken } = req.body;
+    
+    // Opcional: validar token de sistema
+    // if (systemToken !== process.env.SYSTEM_TOKEN) {
+    //   return res.status(401).json({ message: 'Token de sistema inválido' });
+    // }
+
+    const now = new Date();
+    console.log(`[${now.toISOString()}] Iniciando rebajo automático de inventario para todos los usuarios`);
+
+    // Obtener todas las mascotas de todos los usuarios
+    const allPets = await Pet.find({}).populate('user');
+    
+    const results = {
+      totalPets: allPets.length,
+      updated: 0,
+      skipped: 0,
+      errors: []
+    };
+
+    for (const pet of allPets) {
+      try {
+        const result = await applyInventoryAutoUpdateForPet(pet, pet.user._id);
+        if (result.consumed > 0) {
+          results.updated++;
+          console.log(`✓ ${pet.name} (${pet.user.email}): ${result.consumed} comidas consumidas`);
+        } else {
+          results.skipped++;
+        }
+      } catch (error) {
+        results.errors.push({
+          petId: pet._id,
+          petName: pet.name,
+          userEmail: pet.user.email,
+          error: error.message
+        });
+        console.error(`✗ Error con ${pet.name} (${pet.user.email}):`, error.message);
+      }
+    }
+
+    console.log(`[${now.toISOString()}] Rebajo automático completado:`, results);
+
+    res.json({
+      message: 'Rebajo automático de inventario completado',
+      timestamp: now,
+      results
+    });
+  } catch (error) {
+    console.error('Error en rebajo automático del sistema:', error);
+    next(error);
+  }
+});
+
+// Forzar rebajo automático manual para una mascota específica
+router.post('/:id/force-inventory-update', async (req, res, next) => {
+  try {
+    const pet = await Pet.findOne({ _id: req.params.id, user: req.user._id });
+    if (!pet) {
+      return res.status(404).json({ message: 'Mascota no encontrada' });
+    }
+
+    const result = await applyInventoryAutoUpdateForPet(pet, req.user._id);
+    
+    res.json({
+      message: 'Actualización de inventario completada',
+      petName: pet.name,
+      result
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// Obtener información de la última actualización de inventario para todas las mascotas
+router.get('/inventory-status', async (req, res, next) => {
+  try {
+    const pets = await Pet.find({ user: req.user._id }).select(
+      'name totalInventory mealsPerDay feedingTimes lastInventoryUpdate createdAt'
+    );
+
+    const now = new Date(); // Mover la declaración aquí, fuera del map
+
+    const inventoryStatus = pets.map(pet => {
+      const lastUpdate = pet.lastInventoryUpdate || pet.createdAt;
+      const hoursSinceUpdate = Math.floor((now - lastUpdate) / (1000 * 60 * 60));
+      
+      return {
+        petId: pet._id,
+        petName: pet.name,
+        totalInventory: pet.totalInventory,
+        mealsPerDay: pet.mealsPerDay,
+        feedingTimes: pet.feedingTimes || [],
+        lastInventoryUpdate: lastUpdate,
+        hoursSinceUpdate,
+        needsUpdate: hoursSinceUpdate >= 24 // Sugerir actualización si han pasado más de 24 horas
+      };
+    });
+
+    res.json({
+      pets: inventoryStatus,
+      lastChecked: now
     });
   } catch (error) {
     next(error);

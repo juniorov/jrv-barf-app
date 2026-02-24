@@ -32,7 +32,7 @@ const savePortions = async () => {
   saving.value = true;
   try {
     const updates = [];
-    
+
     for (const pet of pets.value) {
       if (pet.ingredients && pet.ingredients.length > 0) {
         updates.push(
@@ -46,7 +46,7 @@ const savePortions = async () => {
         );
       }
     }
-    
+
     await Promise.all(updates);
     success.value = 'Porciones deseadas guardadas correctamente';
   } catch (e) {
@@ -59,35 +59,35 @@ const savePortions = async () => {
 // Calcula cuántas porciones faltan por ingrediente en las bolsas incompletas
 const getMissingPortions = (ingredientId) => {
   let missingPortions = 0;
-  
+
   bags.value.forEach(bag => {
     if (!bag.pet) return; // Skip bolsas sin mascota
-    
+
     // Manejar tanto objetos como IDs en bag.pet
     const bagPetId = typeof bag.pet === 'object' ? bag.pet._id : bag.pet;
-    
+
     // Encontrar la mascota de esta bolsa
     const pet = pets.value.find(p => p._id === bagPetId);
     if (!pet || !pet.ingredients) return;
-    
+
     // Verificar si la mascota debe tener este ingrediente
-    const petShouldHaveIngredient = pet.ingredients.some(ing => 
+    const petShouldHaveIngredient = pet.ingredients.some(ing =>
       (typeof ing.ingredient === 'object' ? ing.ingredient._id : ing.ingredient) === ingredientId
     );
     if (!petShouldHaveIngredient) return;
-    
+
     // Verificar si la bolsa ya tiene este ingrediente
     const bagHasIngredient = bag.ingredients.some(bagIng => {
       const bagIngId = typeof bagIng.ingredient === 'object' ? bagIng.ingredient._id : bagIng.ingredient;
       return bagIngId === ingredientId;
     });
-    
+
     // Si la mascota debe tener el ingrediente pero la bolsa no lo tiene, cuenta como faltante
     if (!bagHasIngredient) {
       missingPortions += bag.quantity || 1;
     }
   });
-  
+
   return missingPortions;
 };
 
@@ -95,27 +95,27 @@ const getMissingPortions = (ingredientId) => {
 const getMissingBagsForIngredient = (ingredientId, petId) => {
   return bags.value.filter(bag => {
     if (!bag.pet) return false;
-    
+
     // Solo bolsas de la mascota específica
     const bagPetId = typeof bag.pet === 'object' ? bag.pet._id : bag.pet;
     if (bagPetId !== petId) return false;
-    
+
     // Encontrar la mascota
     const pet = pets.value.find(p => p._id === petId);
     if (!pet || !pet.ingredients) return false;
-    
+
     // Verificar si la mascota debe tener este ingrediente
-    const petShouldHaveIngredient = pet.ingredients.some(ing => 
+    const petShouldHaveIngredient = pet.ingredients.some(ing =>
       (typeof ing.ingredient === 'object' ? ing.ingredient._id : ing.ingredient) === ingredientId
     );
     if (!petShouldHaveIngredient) return false;
-    
+
     // Verificar si la bolsa ya tiene este ingrediente
     const bagHasIngredient = bag.ingredients.some(bagIng => {
       const bagIngId = typeof bagIng.ingredient === 'object' ? bagIng.ingredient._id : bagIng.ingredient;
       return bagIngId === ingredientId;
     });
-    
+
     // Retorna true si la bolsa NO tiene el ingrediente (lo necesita)
     return !bagHasIngredient;
   });
@@ -124,27 +124,27 @@ const getMissingBagsForIngredient = (ingredientId, petId) => {
 // Obtiene los nombres de los ingredientes que faltan en una bolsa específica
 const getMissingIngredientsForBag = (bag) => {
   if (!bag.pet) return [];
-  
+
   const bagPetId = typeof bag.pet === 'object' ? bag.pet._id : bag.pet;
   const pet = pets.value.find(p => p._id === bagPetId);
   if (!pet || !pet.ingredients) return [];
-  
+
   const missingIngredients = [];
-  
+
   pet.ingredients.forEach(petIng => {
     const petIngId = typeof petIng.ingredient === 'object' ? petIng.ingredient._id : petIng.ingredient;
     const petIngName = typeof petIng.ingredient === 'object' ? petIng.ingredient.name : 'Ingrediente';
-    
+
     const bagHasIngredient = bag.ingredients.some(bagIng => {
       const bagIngId = typeof bagIng.ingredient === 'object' ? bagIng.ingredient._id : bagIng.ingredient;
       return bagIngId === petIngId;
     });
-    
+
     if (!bagHasIngredient) {
       missingIngredients.push(petIngName);
     }
   });
-  
+
   return missingIngredients;
 };
 
@@ -153,7 +153,7 @@ const hasSinglePet = computed(() => pets.value.length === 1);
 
 const totals = computed(() => {
   const result = [];
-  
+
   pets.value.forEach(pet => {
     if (pet.ingredients && pet.ingredients.length > 0) {
       pet.ingredients.forEach(ing => {
@@ -163,7 +163,7 @@ const totals = computed(() => {
         const gramsPerPortion = Number(ing.gramsPerPortion || 0);
         const totalGrams = totalPortions * gramsPerPortion;
         const kilos = totalGrams >= 1000 ? totalGrams / 1000 : 0;
-        
+
         result.push({
           petId: pet._id,
           petName: pet.name,
@@ -179,7 +179,7 @@ const totals = computed(() => {
       });
     }
   });
-  
+
   return result;
 });
 
@@ -193,7 +193,7 @@ onMounted(loadPets);
     </div>
 
     <p class="text-muted small mb-3">
-      Indica cuántas porciones deseas preparar de cada ingrediente por mascota. 
+      Indica cuántas porciones deseas preparar de cada ingrediente por mascota.
       <strong>Se incluyen automáticamente las porciones faltantes de bolsas incompletas.</strong>
       La aplicación calcula los gramos y convierte automáticamente a kilogramos cuando corresponde.
     </p>
@@ -267,7 +267,7 @@ onMounted(loadPets);
               </tbody>
             </table>
           </div>
-          
+
           <!-- Vista mobile optimizada -->
           <div class="d-lg-none">
             <div class="mb-2" v-if="hasSinglePet">
@@ -275,7 +275,7 @@ onMounted(loadPets);
                 <i class="bi bi-heart-fill me-1"></i>{{ pets[0].name }}
               </span>
             </div>
-            
+
             <div v-for="row in totals" :key="`${row.petId}-${row.ingredientId}`" class="card mb-3">
               <div class="card-header py-2">
                 <div class="d-flex justify-content-between align-items-center">
@@ -307,7 +307,7 @@ onMounted(loadPets);
                     <div class="small text-muted">{{ row.desiredPortions }} + {{ row.missingPortions }}</div>
                   </div>
                 </div>
-                
+
                 <div class="text-center p-2 bg-light rounded">
                   <div class="h5 mb-0">
                     <span v-if="row.kilos">
@@ -361,9 +361,9 @@ onMounted(loadPets);
                   <td>{{ bag.quantity || 1 }}</td>
                   <td>
                     <span v-if="bag.pet" class="small">
-                      <span 
-                        v-for="missing in getMissingIngredientsForBag(bag)" 
-                        :key="missing" 
+                      <span
+                        v-for="missing in getMissingIngredientsForBag(bag)"
+                        :key="missing"
                         class="badge bg-light text-dark me-1"
                       >
                         {{ missing }}
@@ -378,7 +378,7 @@ onMounted(loadPets);
               </tbody>
             </table>
           </div>
-          
+
           <!-- Vista mobile compacta -->
           <div class="d-md-none">
             <div v-for="bag in bags" :key="bag._id" class="card mb-2">
@@ -390,9 +390,9 @@ onMounted(loadPets);
                 <div v-if="bag.pet" class="small">
                   <div class="text-muted mb-1">{{ bag.pet.name }} - Faltantes:</div>
                   <div>
-                    <span 
-                      v-for="missing in getMissingIngredientsForBag(bag)" 
-                      :key="missing" 
+                    <span
+                      v-for="missing in getMissingIngredientsForBag(bag)"
+                      :key="missing"
                       class="badge bg-warning text-dark me-1 mb-1"
                     >
                       {{ missing }}

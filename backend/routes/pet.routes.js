@@ -11,12 +11,21 @@ const router = Router();
 // Todas las rutas de este módulo requieren autenticación
 router.use(authRequired);
 
+// Función auxiliar para obtener la fecha actual en zona horaria de Costa Rica (UTC-6)
+function getCostaRicaDate() {
+  const now = new Date();
+  now.setUTCHours(now.getUTCHours() - 6);
+  return now;
+}
+
 // Calcula cuántas comidas deberían haberse hecho desde lastInventoryUpdate hasta ahora,
 // usando las feedingTimes si están definidas. Si no hay feedingTimes, se usa un consumo
 // de mealsPerDay por día completo transcurrido.
 // IMPORTANTE: Verifica registros manuales existentes para evitar doble rebajo
 export async function applyInventoryAutoUpdateForPet(pet, userId) {
-  const now = new Date();
+  // Usar zona horaria de Costa Rica (UTC-6)
+  const now = getCostaRicaDate();
+  
   const last = pet.lastInventoryUpdate || pet.createdAt || now;
 
   // Nada que hacer si last es en el futuro o no hay comidas configuradas
@@ -136,7 +145,7 @@ export async function applyInventoryAutoUpdateForPet(pet, userId) {
   pet.totalInventory -= mealsToConsume;
   pet.consumedCount = (pet.consumedCount || 0) + mealsToConsume;
   
-  // Actualizar la fecha de última actualización
+  // Actualizar la fecha de última actualización (zona horaria Costa Rica)
   pet.lastInventoryUpdate = now;
   await pet.save();
 
@@ -149,7 +158,7 @@ export async function applyInventoryAutoUpdateForPet(pet, userId) {
   }).populate('ingredients.ingredient');
 
   if (representativeBag && representativeBag.ingredients) {
-    // Crear fecha sin hora para el registro de consumo (solo día)
+    // Crear fecha sin hora para el registro de consumo (solo día) - zona horaria Costa Rica
     const consumptionDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
     
     for (const ingredientBag of representativeBag.ingredients) {
@@ -333,13 +342,18 @@ router.post('/:id/feed-day', async (req, res, next) => {
       });
     }
 
+    // Obtener tiempo actual en zona horaria de Costa Rica (UTC-6)
+    const nowCostaRica = getCostaRicaDate();
+
     // Consumir del inventario total
     pet.totalInventory -= meals;
     pet.consumedCount += meals;
+    // IMPORTANTE: Actualizar lastInventoryUpdate para evitar que el proceso automático se ejecute hasta mañana
+    pet.lastInventoryUpdate = nowCostaRica;
     await pet.save();
 
-    // Registrar en el historial (consumo manual)
-    const consumptionDate = new Date();
+    // Registrar en el historial (consumo manual) - usar zona horaria de Costa Rica
+    const consumptionDate = new Date(nowCostaRica);
     consumptionDate.setHours(0, 0, 0, 0);
     
     // Buscar una bolsa representativa para los ingredientes
@@ -376,7 +390,9 @@ router.post('/:id/feed-day', async (req, res, next) => {
       petId: pet._id,
       mealsRequested: meals,
       mealsConsumed: meals,
-      remainingInventory: pet.totalInventory
+      remainingInventory: pet.totalInventory,
+      lastInventoryUpdate: pet.lastInventoryUpdate, // Incluir para debugging
+      timezone: 'Costa Rica (UTC-6)'
     });
   } catch (error) {
     next(error);
@@ -396,8 +412,8 @@ router.post('/system/auto-inventory-update', async (req, res, next) => {
     //   return res.status(401).json({ message: 'Token de sistema inválido' });
     // }
 
-    const now = new Date();
-    console.log(`[${now.toISOString()}] Iniciando rebajo automático de inventario para todos los usuarios`);
+    const now = getCostaRicaDate();
+    console.log(`[${now.toISOString()}] Iniciando rebajo automático de inventario para todos los usuarios (Zona horaria: Costa Rica UTC-6)`);
 
     // Obtener todas las mascotas de todos los usuarios
     const allPets = await Pet.find({}).populate('user');
@@ -450,14 +466,37 @@ router.post('/:id/force-inventory-update', async (req, res, next) => {
       return res.status(404).json({ message: 'Mascota no encontrada' });
     }
 
+    // Verificar si ya se actualizó hoy
+    const nowCostaRica = getCostaRicaDate();
+    const today = new Date(nowCostaRica.getFullYear(), nowCostaRica.getMonth(), nowCostaRica.getDate());
+    const lastUpdateDate = pet.lastInventoryUpdate ? 
+      new Date(pet.lastInventoryUpdate.getFullYear(), pet.lastInventoryUpdate.getMonth(), pet.lastInventoryUpdate.getDate()) :
+      null;
+
+    if (lastUpdateDate && lastUpdateDate.getTime() >= today.getTime()) {
+      return res.json({
+        message: 'El inventario ya fue actualizado hoy',
+        petName: pet.name,
+        result: { consumed: 0, reason: 'Already updated today', lastUpdate: pet.lastInventoryUpdate }
+      });
+    }
+
     const result = await applyInventoryAutoUpdateForPet(pet, req.user._id);
     
     res.json({
-      message: 'Actualización de inventario completada',
+      message: result.consumed > 0 ? 
+        `Inventario actualizado. Se consumieron ${result.consumed} comidas` : 
+        'No hay comidas pendientes por consumir',
       petName: pet.name,
-      result
+      result: {
+        ...result,
+        consumedMeals: result.consumed,
+        currentInventory: pet.totalInventory,
+        lastUpdate: pet.lastInventoryUpdate
+      }
     });
   } catch (error) {
+    console.error('Error en force-inventory-update:', error);
     next(error);
   }
 });
@@ -469,11 +508,26 @@ router.get('/inventory-status', async (req, res, next) => {
       'name totalInventory mealsPerDay feedingTimes lastInventoryUpdate createdAt'
     );
 
-    const now = new Date(); // Mover la declaración aquí, fuera del map
+    const now = getCostaRicaDate(); // Usar zona horaria de Costa Rica
 
     const inventoryStatus = pets.map(pet => {
       const lastUpdate = pet.lastInventoryUpdate || pet.createdAt;
-      const hoursSinceUpdate = Math.floor((now - lastUpdate) / (1000 * 60 * 60));
+      const timeDiffMs = now - lastUpdate;
+      const minutesSinceUpdate = Math.floor(timeDiffMs / (1000 * 60));
+      const hoursSinceUpdate = Math.floor(minutesSinceUpdate / 60);
+      
+      // Formatear tiempo transcurrido de manera más precisa
+      let timeAgoText;
+      if (minutesSinceUpdate < 60) {
+        timeAgoText = `${minutesSinceUpdate} min`;
+      } else if (hoursSinceUpdate < 24) {
+        const remainingMinutes = minutesSinceUpdate % 60;
+        timeAgoText = remainingMinutes > 0 ? `${hoursSinceUpdate}h ${remainingMinutes}min` : `${hoursSinceUpdate}h`;
+      } else {
+        const days = Math.floor(hoursSinceUpdate / 24);
+        const remainingHours = hoursSinceUpdate % 24;
+        timeAgoText = remainingHours > 0 ? `${days}d ${remainingHours}h` : `${days}d`;
+      }
       
       return {
         petId: pet._id,
@@ -482,14 +536,18 @@ router.get('/inventory-status', async (req, res, next) => {
         mealsPerDay: pet.mealsPerDay,
         feedingTimes: pet.feedingTimes || [],
         lastInventoryUpdate: lastUpdate,
-        hoursSinceUpdate,
+        hoursSinceUpdate, // Mantener para compatibilidad
+        minutesSinceUpdate,
+        timeAgoText,
         needsUpdate: hoursSinceUpdate >= 24 // Sugerir actualización si han pasado más de 24 horas
       };
     });
 
     res.json({
       pets: inventoryStatus,
-      lastChecked: now
+      lastChecked: now,
+      serverTime: now.toISOString(),
+      timezone: 'America/Costa_Rica (UTC-6)'
     });
   } catch (error) {
     next(error);

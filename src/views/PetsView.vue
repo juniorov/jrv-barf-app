@@ -142,7 +142,16 @@ const registerFeedingDay = async (pet) => {
   feedingLoading.value = true;
   try {
     const res = await api.post(`/pets/${pet._id}/feed-day`, {});
-    success.value = `Se registró un día de comida para ${pet.name}. Inventario restante: ${res.remainingInventory} bolsas`;
+    success.value = `✅ Se registró un día de comida para ${pet.name}. Inventario restante: ${res.remainingInventory} bolsas. El rebajo automático no se ejecutará hasta mañana.`;
+    
+    // Debug: mostrar información de la actualización
+    console.log('🍽️ Registro de comida completado:', {
+      pet: pet.name,
+      remainingInventory: res.remainingInventory,
+      lastUpdate: res.lastInventoryUpdate,
+      timezone: res.timezone
+    });
+    
     await loadPets();
   } catch (e) {
     error.value = e.message || 'No se pudo registrar el día de comida';

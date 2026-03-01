@@ -1,14 +1,46 @@
 <script setup>
-import { useRouter, RouterLink, RouterView } from 'vue-router';
+import { ref, onMounted, watch, nextTick } from 'vue';
+import { useRouter, useRoute, RouterLink, RouterView } from 'vue-router';
 import { useAuthStore } from '../stores/auth.js';
 
 const router = useRouter();
+const route = useRoute();
 const auth = useAuthStore();
+const navbarCollapse = ref(null);
 
 const logout = () => {
   auth.logout();
   router.push({ name: 'login' });
 };
+
+// Función para cerrar el menú hamburguesa
+const closeNavbarMenu = () => {
+  if (navbarCollapse.value) {
+    // Verificar si Bootstrap está disponible
+    if (window.bootstrap && window.bootstrap.Collapse) {
+      const bsCollapse = window.bootstrap.Collapse.getInstance(navbarCollapse.value);
+      if (bsCollapse) {
+        bsCollapse.hide();
+      }
+    } else {
+      // Fallback manual si Bootstrap no está disponible
+      navbarCollapse.value.classList.remove('show');
+      navbarCollapse.value.classList.add('collapse');
+    }
+  }
+};
+
+// Cerrar menú cuando cambia la ruta (después de hacer clic en un enlace)
+watch(route, () => {
+  nextTick(() => {
+    closeNavbarMenu();
+  });
+});
+
+onMounted(() => {
+  // Asegurarse de que tenemos la referencia al elemento
+  navbarCollapse.value = document.getElementById('mainNavbar');
+});
 </script>
 
 <template>

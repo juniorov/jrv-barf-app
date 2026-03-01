@@ -11,6 +11,38 @@ const router = Router();
 // Todas las rutas de este módulo requieren autenticación
 router.use(authRequired);
 
+// Función auxiliar para calcular edad desde fecha de nacimiento
+function calculateAge(birthDate) {
+  if (!birthDate) return 0;
+  
+  const today = new Date();
+  const birth = new Date(birthDate);
+  
+  // Calcular años, meses y días transcurridos
+  let years = today.getFullYear() - birth.getFullYear();
+  let months = today.getMonth() - birth.getMonth();
+  let days = today.getDate() - birth.getDate();
+  
+  // Ajustar si no ha pasado el día del cumpleaños este mes
+  if (days < 0) {
+    months--;
+    // Obtener días del mes anterior
+    const lastMonth = new Date(today.getFullYear(), today.getMonth(), 0);
+    days += lastMonth.getDate();
+  }
+  
+  // Ajustar si no ha pasado el mes del cumpleaños este año
+  if (months < 0) {
+    years--;
+    months += 12;
+  }
+  
+  // Convertir a años decimales (meses / 12 + días / 365)
+  const ageInYears = years + (months / 12) + (days / 365);
+  
+  return Math.max(0, Math.round(ageInYears * 10) / 10); // Redondear a 1 decimal
+}
+
 // Función auxiliar para obtener la fecha actual en zona horaria de Costa Rica (UTC-6)
 function getCostaRicaDate() {
   const now = new Date();
@@ -238,16 +270,28 @@ router.get('/', async (req, res, next) => {
 // Crea una nueva mascota
 router.post('/', async (req, res, next) => {
   try {
-    const { name, age, mealsPerDay = 1, maxIngredientsPerBag = 5, totalInventory = 0, feedingTimes = [] } = req.body;
+    const { name, age, birthDate, mealsPerDay = 1, maxIngredientsPerBag = 5, totalInventory = 0, feedingTimes = [] } = req.body;
 
-    if (!name || age === undefined) {
-      return res.status(400).json({ message: 'Nombre y edad son obligatorios' });
+    if (!name) {
+      return res.status(400).json({ message: 'Nombre es obligatorio' });
+    }
+
+    // Calcular edad si se proporciona birthDate, si no usar age directamente
+    let finalAge = age || 0;
+    let finalBirthDate = null;
+    
+    if (birthDate) {
+      finalBirthDate = new Date(birthDate);
+      finalAge = calculateAge(finalBirthDate);
+    } else if (age === undefined) {
+      return res.status(400).json({ message: 'Fecha de nacimiento o edad son obligatorios' });
     }
 
     const pet = await Pet.create({
       user: req.user._id,
       name,
-      age,
+      age: finalAge,
+      birthDate: finalBirthDate,
       mealsPerDay,
       maxIngredientsPerBag,
       totalInventory,
@@ -266,9 +310,28 @@ router.post('/', async (req, res, next) => {
 // Actualiza una mascota existente
 router.put('/:id', async (req, res, next) => {
   try {
-    const { name, age, mealsPerDay, maxIngredientsPerBag, feedingTimes, totalInventory } = req.body;
+    const { name, age, birthDate, mealsPerDay, maxIngredientsPerBag, feedingTimes, totalInventory } = req.body;
 
-    const updateData = { name, age, mealsPerDay, maxIngredientsPerBag, feedingTimes };
+    // Calcular edad si se proporciona birthDate
+    let finalAge = age;
+    let finalBirthDate = birthDate ? new Date(birthDate) : undefined;
+    
+    if (birthDate) {
+      finalAge = calculateAge(finalBirthDate);
+    }
+
+    const updateData = { 
+      name, 
+      age: finalAge, 
+      mealsPerDay, 
+      maxIngredientsPerBag, 
+      feedingTimes 
+    };
+    
+    // Solo incluir birthDate si está presente en el request
+    if (birthDate !== undefined) {
+      updateData.birthDate = finalBirthDate;
+    }
     
     // Solo incluir totalInventory si está presente en el request
     if (typeof totalInventory === 'number') {

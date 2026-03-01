@@ -5,7 +5,13 @@ import apiClient from '../api/client.js';
 const loading = ref(true);
 const error = ref(null);
 const petStatistics = ref([]);
-const monthlyConsumption = ref({});
+const monthlyConsumption = ref({
+  hasData: false,
+  consumption: [],
+  totalRecords: 0,
+  monthName: '',
+  year: null
+});
 const summary = ref({});
 const inventoryStatus = ref([]);
 const forceUpdateLoading = ref({});
@@ -31,6 +37,46 @@ const months = [
   { value: 11, name: 'Noviembre' },
   { value: 12, name: 'Diciembre' }
 ];
+
+// Función para calcular edad en el frontend (igual que en PetsView)
+const calculateAge = (birthDate) => {
+  if (!birthDate) return 0;
+  
+  const today = new Date();
+  const birth = new Date(birthDate);
+  
+  // Calcular años, meses y días transcurridos
+  let years = today.getFullYear() - birth.getFullYear();
+  let months = today.getMonth() - birth.getMonth();
+  let days = today.getDate() - birth.getDate();
+  
+  // Ajustar si no ha pasado el día del cumpleaños este mes
+  if (days < 0) {
+    months--;
+    // Obtener días del mes anterior
+    const lastMonth = new Date(today.getFullYear(), today.getMonth(), 0);
+    days += lastMonth.getDate();
+  }
+  
+  // Ajustar si no ha pasado el mes del cumpleaños este año
+  if (months < 0) {
+    years--;
+    months += 12;
+  }
+  
+  // Convertir a años decimales (meses / 12 + días / 365)
+  const ageInYears = years + (months / 12) + (days / 365);
+  
+  return Math.max(0, Math.round(ageInYears * 10) / 10); // Redondear a 1 decimal
+};
+
+// Función para obtener la edad de una mascota correctamente formateada
+const getPetAge = (pet) => {
+  if (pet.birthDate) {
+    return calculateAge(pet.birthDate);
+  }
+  return Number(pet.age || 0).toFixed(1);
+};
 
 const formatDate = (dateString) => {
   if (!dateString) return 'N/A';
@@ -69,28 +115,23 @@ const loadDashboardData = async () => {
     loading.value = true;
     error.value = null;
 
-    const [petStatsResponse, monthlyResponse, summaryResponse, inventoryResponse] = await Promise.all([
+    const [petStatsResponse, summaryResponse, inventoryResponse] = await Promise.all([
       apiClient.get('/dashboard/pet-statistics'),
-      apiClient.get(`/dashboard/monthly-consumption?year=${selectedYear.value}&month=${selectedMonth.value}`),
       apiClient.get('/dashboard/summary'),
       apiClient.get('/pets/inventory-status')
     ]);
 
     petStatistics.value = petStatsResponse;
-    monthlyConsumption.value = monthlyResponse;
     summary.value = summaryResponse;
     inventoryStatus.value = inventoryResponse.pets || [];
     lastDashboardUpdate.value = new Date();
 
-    // Debug: mostrar información del servidor sobre zona horaria
-    if (inventoryResponse.serverTime) {
-      console.log('🕒 Hora del servidor (Costa Rica):', inventoryResponse.serverTime);
-      console.log('🌍 Zona horaria:', inventoryResponse.timezone);
-    }
+    // Cargar datos mensuales por separado
+    await loadMonthlyData();
 
   } catch (err) {
     error.value = err.message || 'Error al cargar los datos del dashboard';
-    console.error('Error loading dashboard data:', err);
+    console.error('❌ Error loading dashboard data:', err);
   } finally {
     loading.value = false;
   }
@@ -99,11 +140,24 @@ const loadDashboardData = async () => {
 const loadMonthlyData = async () => {
   try {
     const response = await apiClient.get(`/dashboard/monthly-consumption?year=${selectedYear.value}&month=${selectedMonth.value}`);
-    monthlyConsumption.value = response;
+
+    monthlyConsumption.value = {
+      hasData: response?.hasData || false,
+      consumption: response?.consumption || [],
+      totalRecords: response?.totalRecords ?? 0,
+      monthName: response?.monthName || months.find(m => m.value === selectedMonth.value)?.name || 'Mes desconocido',
+      year: response?.year || selectedYear.value
+    };
+
   } catch (err) {
-    console.error('Error loading monthly data:', err);
+    error.value = `Error al cargar datos de consumo mensual: ${err.message}`;
   }
 };
+
+// Watch para recargar datos cuando cambie el mes o año
+watch([selectedYear, selectedMonth], () => {
+  loadMonthlyData();
+}, { immediate: false });
 
 const forceInventoryUpdate = async (petId, petName) => {
   try {
@@ -116,11 +170,6 @@ const forceInventoryUpdate = async (petId, petName) => {
     await loadDashboardData();
 
     // Mostrar mensaje de éxito detallado
-    if (response.result && response.result.consumedMeals > 0) {
-      console.log(`✅ ${response.message}. Comidas consumidas: ${response.result.consumedMeals}`);
-    } else {
-      console.log(`ℹ️ ${response.message}`);
-    }
 
   } catch (err) {
     console.error('Error updating inventory:', err);
@@ -140,7 +189,6 @@ const updateInventoryStatus = async () => {
     const inventoryResponse = await apiClient.get('/pets/inventory-status');
     inventoryStatus.value = inventoryResponse.pets || [];
     lastDashboardUpdate.value = new Date();
-    console.log('☀️ Dashboard actualizado automáticamente:', lastDashboardUpdate.value.toLocaleTimeString());
   } catch (err) {
     console.error('Error updating inventory status:', err);
   }
@@ -169,8 +217,8 @@ const stopAutoUpdate = () => {
   }
 };
 
-onMounted(() => {
-  loadDashboardData();
+onMounted(async () => {
+  await loadDashboardData();
   startAutoUpdate();
 });
 
@@ -214,62 +262,6 @@ onUnmounted(() => {
 
     <!-- Dashboard content -->
     <div v-else>
-      <!-- Resumen general -->
-      <div class="row mb-4">
-        <div class="col-md-3">
-          <div class="card bg-primary text-white">
-            <div class="card-body">
-              <div class="d-flex align-items-center">
-                <i class="bi bi-heart-fill fs-2 me-3"></i>
-                <div>
-                  <h3 class="card-title mb-0">{{ summary.totalPets }}</h3>
-                  <p class="card-text">Mascotas</p>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-        <div class="col-md-3">
-          <div class="card bg-success text-white">
-            <div class="card-body">
-              <div class="d-flex align-items-center">
-                <i class="bi bi-check-circle-fill fs-2 me-3"></i>
-                <div>
-                  <h3 class="card-title mb-0">{{ summary.completedBags }}</h3>
-                  <p class="card-text">Bolsas Completas</p>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-        <div class="col-md-3">
-          <div class="card bg-warning text-dark">
-            <div class="card-body">
-              <div class="d-flex align-items-center">
-                <i class="bi bi-clock-fill fs-2 me-3"></i>
-                <div>
-                  <h3 class="card-title mb-0">{{ summary.incompleteBags }}</h3>
-                  <p class="card-text">Bolsas Incompletas</p>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-        <div class="col-md-3">
-          <div class="card bg-info text-white">
-            <div class="card-body">
-              <div class="d-flex align-items-center">
-                <i class="bi bi-basket3-fill fs-2 me-3"></i>
-                <div>
-                  <h3 class="card-title mb-0">{{ summary.totalIngredients }}</h3>
-                  <p class="card-text">Ingredientes</p>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
       <!-- Estadísticas por mascota -->
       <div class="row mb-4">
         <div class="col-12">
@@ -294,7 +286,7 @@ onUnmounted(() => {
                       <div class="d-flex justify-content-between align-items-center">
                         <h6 class="mb-0 fw-bold">{{ stat.pet.name }}</h6>
                         <div class="d-flex align-items-center gap-2">
-                          <span class="badge bg-secondary">{{ stat.pet.age }} años</span>
+                          <span class="badge bg-secondary">{{ getPetAge(stat.pet) }} años</span>
                           <span
                             v-if="getPetInventoryInfo(stat.pet.id)"
                               :class="['badge', getUpdateStatusBadge(getPetInventoryInfo(stat.pet.id)).class]"
@@ -327,13 +319,13 @@ onUnmounted(() => {
                               <strong>Horarios:</strong> {{ stat.pet.feedingTimes.join(', ') }}
                             </div>
                             <div class="mb-2">
-                              <strong>Se acaba el:</strong>
+                              <strong>Se acaba el: </strong>
                               <span :class="stat.shouldBuyNow ? 'text-danger fw-bold' : 'text-muted'">
                                 {{ formatDate(stat.projectedEmptyDate) }}
                               </span>
                             </div>
                             <div v-if="stat.recommendedPurchaseDate">
-                              <strong>Comprar antes del:</strong>
+                              <strong>Comprar antes del: </strong>
                               <span :class="stat.shouldBuyNow ? 'text-danger fw-bold' : 'text-success'">
                                 {{ formatDate(stat.recommendedPurchaseDate) }}
                               </span>
@@ -376,37 +368,59 @@ onUnmounted(() => {
                   <i class="bi bi-calendar3 me-2"></i>
                   Consumo por Ingrediente
                 </h5>
-                <div class="d-flex gap-2">
-                  <select v-model="selectedMonth" @change="loadMonthlyData" class="form-select form-select-sm">
+                <div class="d-flex gap-2 align-items-center">
+                  <select v-model="selectedMonth" class="form-select form-select-sm">
                     <option v-for="month in months" :key="month.value" :value="month.value">
                       {{ month.name }}
                     </option>
                   </select>
-                  <select v-model="selectedYear" @change="loadMonthlyData" class="form-select form-select-sm">
+                  <select v-model="selectedYear" class="form-select form-select-sm">
                     <option :value="2024">2024</option>
                     <option :value="2025">2025</option>
                     <option :value="2026">2026</option>
                   </select>
+                  <button
+                    class="btn btn-outline-secondary btn-sm"
+                    @click="loadMonthlyData"
+                    title="Recargar datos del consumo mensual"
+                  >
+                    <i class="bi bi-arrow-clockwise"></i>
+                  </button>
                 </div>
               </div>
             </div>
             <div class="card-body">
-              <h6 class="text-muted mb-3">{{ monthlyConsumption.monthName }} {{ monthlyConsumption.year }}</h6>
+              <h6 class="text-muted mb-3">
+                {{ monthlyConsumption.monthName || months.find(m => m.value === selectedMonth)?.name }} {{ monthlyConsumption.year || selectedYear }}
+                <span v-if="monthlyConsumption.totalRecords != null && monthlyConsumption.totalRecords > 0" class="badge bg-info ms-2">
+                  {{ monthlyConsumption.totalRecords }} registros
+                </span>
+              </h6>
+
               <div v-if="!monthlyConsumption.hasData || (monthlyConsumption.consumption && monthlyConsumption.consumption.length === 0)" class="text-center py-4">
                 <i class="bi bi-info-circle text-muted fs-1 mb-3"></i>
-                <p class="text-muted mb-2">No hay datos de consumo para este período</p>
+                <p class="text-muted mb-2">No hay datos de consumo para {{ months.find(m => m.value === selectedMonth)?.name }} {{ selectedYear }}</p>
                 <small class="text-muted">
-                  Los datos se generan automáticamente cuando las mascotas consumen sus comidas diarias
+                  Los datos se generan automáticamente cuando:<br>
+                  • Se registran días de comida para las mascotas<br>
+                  • Se completan bolsas y se asignan al inventario<br>
+                  • Se actualiza forzadamente el inventario desde el dashboard
                 </small>
               </div>
-              <div v-else-if="monthlyConsumption.consumption" class="row">
+              <div v-else-if="monthlyConsumption.consumption && monthlyConsumption.consumption.length > 0" class="row">
                 <div v-for="item in monthlyConsumption.consumption" :key="item.ingredient" class="col-md-4 mb-3">
                   <div class="card border-0 bg-light">
                     <div class="card-body text-center">
                       <h6 class="fw-bold text-capitalize">{{ item.ingredient }}</h6>
-                      <div class="fs-4 text-primary fw-bold">{{ item.amount }}</div>
+                      <div class="fs-4 text-primary fw-bold">{{ item.amount }}g</div>
+                      <small class="text-muted">Total consumido</small>
                     </div>
                   </div>
+                </div>
+              </div>
+              <div v-else class="text-center py-4">
+                <div class="spinner-border text-primary" role="status">
+                  <span class="visually-hidden">Cargando consumo mensual...</span>
                 </div>
               </div>
             </div>

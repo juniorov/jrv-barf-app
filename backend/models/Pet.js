@@ -17,7 +17,8 @@ const petSchema = new mongoose.Schema(
   {
     user: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true, index: true },
     name: { type: String, required: true, trim: true },
-    age: { type: Number, required: true, min: 0 },
+    age: { type: Number, required: true, min: 0 }, // Mantener por compatibilidad pero será calculado
+    birthDate: { type: Date }, // Nueva fecha de nacimiento
     // Ingredientes asociados a esta mascota con sus cantidades específicas
     ingredients: {
       type: [petIngredientSchema],

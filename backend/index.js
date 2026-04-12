@@ -8,6 +8,7 @@ import bagRoutes from './routes/bag.routes.js';
 import configRoutes from './routes/config.routes.js';
 import petRoutes from './routes/pet.routes.js';
 import dashboardRoutes from './routes/dashboard.routes.js';
+import { startInventoryAutoUpdateCron } from './cron-inventory-update.js';
 
 // Cargamos variables de entorno necesarias para la API
 if (process.env.NODE_ENV !== 'production') {
@@ -79,5 +80,8 @@ app.use((err, _req, res, _next) => {
 // Arrancamos el servidor HTTP en el puerto configurado
 app.listen(PORT, () => {
   console.log(`API listening on http://localhost:${PORT}`);
+  
+  // Iniciar el cron job para el rebajo automático del inventario
+  startInventoryAutoUpdateCron();
 });
 

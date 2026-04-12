@@ -1,6 +1,10 @@
 <script setup>
-import { ref, onMounted, onUnmounted, watch } from 'vue';
+import { ref, onMounted, onUnmounted, watch, nextTick } from 'vue';
 import apiClient from '../api/client.js';
+import { Chart, registerables } from 'chart.js';
+
+// Register all Chart.js components
+Chart.register(...registerables);
 
 const loading = ref(true);
 const error = ref(null);
@@ -17,6 +21,8 @@ const inventoryStatus = ref([]);
 const forceUpdateLoading = ref({});
 const autoUpdateInterval = ref(null);
 const lastDashboardUpdate = ref(null);
+const consumptionChart = ref(null);
+const chartCanvas = ref(null);
 
 // Datos para el selector de mes
 const currentDate = new Date();
@@ -41,15 +47,15 @@ const months = [
 // Función para calcular edad en el frontend (igual que en PetsView)
 const calculateAge = (birthDate) => {
   if (!birthDate) return 0;
-  
+
   const today = new Date();
   const birth = new Date(birthDate);
-  
+
   // Calcular años, meses y días transcurridos
   let years = today.getFullYear() - birth.getFullYear();
   let months = today.getMonth() - birth.getMonth();
   let days = today.getDate() - birth.getDate();
-  
+
   // Ajustar si no ha pasado el día del cumpleaños este mes
   if (days < 0) {
     months--;
@@ -57,16 +63,16 @@ const calculateAge = (birthDate) => {
     const lastMonth = new Date(today.getFullYear(), today.getMonth(), 0);
     days += lastMonth.getDate();
   }
-  
+
   // Ajustar si no ha pasado el mes del cumpleaños este año
   if (months < 0) {
     years--;
     months += 12;
   }
-  
+
   // Convertir a años decimales (meses / 12 + días / 365)
   const ageInYears = years + (months / 12) + (days / 365);
-  
+
   return Math.max(0, Math.round(ageInYears * 10) / 10); // Redondear a 1 decimal
 };
 
@@ -149,9 +155,112 @@ const loadMonthlyData = async () => {
       year: response?.year || selectedYear.value
     };
 
+    // Create chart after data is loaded
+    await nextTick();
+    createConsumptionChart();
+
   } catch (err) {
     error.value = `Error al cargar datos de consumo mensual: ${err.message}`;
   }
+};
+
+// Función para crear el gráfico de consumo por ingrediente
+const createConsumptionChart = () => {
+  if (!chartCanvas.value) {
+    console.warn('Chart canvas not available');
+    return;
+  }
+
+  // Destroy existing chart if it exists
+  if (consumptionChart.value) {
+    consumptionChart.value.destroy();
+  }
+  console.log('consumptionChart', consumptionChart);
+
+  if (!monthlyConsumption.value.hasData || monthlyConsumption.value.consumption.length === 0) {
+    return;
+  }
+
+  const consumption = monthlyConsumption.value.consumption;
+
+  // Extract labels and data
+  const labels = consumption.map(item => item.ingredient);
+  const data = consumption.map(item => item.gramsTotal);
+
+  // Generate colors
+  const backgroundColors = [
+    'rgba(54, 162, 235, 0.6)',
+    'rgba(255, 99, 132, 0.6)',
+    'rgba(75, 192, 192, 0.6)',
+    'rgba(255, 206, 86, 0.6)',
+    'rgba(153, 102, 255, 0.6)',
+    'rgba(255, 159, 64, 0.6)',
+    'rgba(199, 199, 199, 0.6)',
+    'rgba(83, 102, 255, 0.6)',
+    'rgba(255, 99, 255, 0.6)',
+    'rgba(99, 255, 132, 0.6)'
+  ];
+
+  const borderColors = backgroundColors.map(color => color.replace('0.6', '1'));
+
+  const ctx = chartCanvas.value.getContext('2d');
+
+  consumptionChart.value = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: labels,
+      datasets: [{
+        label: 'Consumo (gramos)',
+        data: data,
+        backgroundColor: backgroundColors.slice(0, labels.length),
+        borderColor: borderColors.slice(0, labels.length),
+        borderWidth: 2,
+        borderRadius: 5,
+        borderSkipped: false
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: {
+          display: false
+        },
+        tooltip: {
+          callbacks: {
+            label: function(context) {
+              const grams = context.parsed.y;
+              if (grams >= 1000) {
+                return `${(grams / 1000).toFixed(2)} kg`;
+              }
+              return `${Math.round(grams)} g`;
+            }
+          }
+        }
+      },
+      scales: {
+        y: {
+          beginAtZero: true,
+          ticks: {
+            callback: function(value) {
+              if (value >= 1000) {
+                return (value / 1000).toFixed(1) + ' kg';
+              }
+              return value + ' g';
+            }
+          },
+          grid: {
+            color: 'rgba(0, 0, 0, 0.05)'
+          }
+        },
+        x: {
+          grid: {
+            display: false
+          }
+        }
+      }
+    }
+  });
 };
 
 // Watch para recargar datos cuando cambie el mes o año
@@ -224,6 +333,10 @@ onMounted(async () => {
 
 onUnmounted(() => {
   stopAutoUpdate();
+  // Destroy chart instance to prevent memory leaks
+  if (consumptionChart.value) {
+    consumptionChart.value.destroy();
+  }
 });
 </script>
 
@@ -407,13 +520,21 @@ onUnmounted(() => {
                   • Se actualiza forzadamente el inventario desde el dashboard
                 </small>
               </div>
-              <div v-else-if="monthlyConsumption.consumption && monthlyConsumption.consumption.length > 0" class="row">
-                <div v-for="item in monthlyConsumption.consumption" :key="item.ingredient" class="col-md-4 mb-3">
-                  <div class="card border-0 bg-light">
-                    <div class="card-body text-center">
-                      <h6 class="fw-bold text-capitalize">{{ item.ingredient }}</h6>
-                      <div class="fs-4 text-primary fw-bold">{{ item.amount }}g</div>
-                      <small class="text-muted">Total consumido</small>
+              <div v-else-if="monthlyConsumption.consumption && monthlyConsumption.consumption.length > 0">
+                <!-- Chart container -->
+                <div class="chart-container" style="position: relative; height: 400px; margin-bottom: 2rem;">
+                  <canvas ref="chartCanvas"></canvas>
+                </div>
+
+                <!-- Summary cards below the chart -->
+                <div class="row">
+                  <div v-for="item in monthlyConsumption.consumption" :key="item.ingredient" class="col-md-4 mb-3">
+                    <div class="card border-0 bg-light">
+                      <div class="card-body text-center">
+                        <h6 class="fw-bold text-capitalize">{{ item.ingredient }}</h6>
+                        <div class="fs-4 text-primary fw-bold">{{ item.amount }}</div>
+                        <small class="text-muted">Total consumido</small>
+                      </div>
                     </div>
                   </div>
                 </div>

@@ -2,8 +2,10 @@
 import { onMounted, ref, computed } from 'vue';
 import api from '../api/client.js';
 import { useAuthStore } from '../stores/auth.js';
+import { useBagStore } from '../stores/bags.js';
 
 const auth = useAuthStore();
+const bagStore = useBagStore();
 
 const ingredients = ref([]);
 const pets = ref([]);
@@ -217,6 +219,8 @@ const completeBag = async (bag) => {
 
     // Remover la bolsa de la lista inmediatamente tras éxito
     bags.value = bags.value.filter((b) => b._id !== bag._id);
+
+    bagStore.markUpdated();
 
     success.value = `✅ ${response.message || 'Bolsa completada correctamente y removida de la lista'}`;
 

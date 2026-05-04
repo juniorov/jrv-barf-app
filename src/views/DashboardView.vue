@@ -1,6 +1,9 @@
 <script setup>
 import { ref, onMounted, onUnmounted, watch } from 'vue';
 import apiClient from '../api/client.js';
+import { useBagStore } from '../stores/bags.js';
+
+const bagStore = useBagStore();
 
 const loading = ref(true);
 const error = ref(null);
@@ -216,6 +219,14 @@ const stopAutoUpdate = () => {
     autoUpdateInterval.value = null;
   }
 };
+
+// Watch para detectar cuando se completa una bolsa y actualizar el dashboard
+watch(() => bagStore.needsRefresh, (needsRefresh) => {
+  if (needsRefresh) {
+    loadDashboardData();
+    bagStore.markRefreshed();
+  }
+});
 
 onMounted(async () => {
   await loadDashboardData();

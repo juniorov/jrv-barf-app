@@ -162,7 +162,7 @@ router.delete('/:id', async (req, res, next) => {
   }
 });
 
-// Marca una bolsa como completada y aumenta el inventario de la mascota
+// Marca una bolsa como completada, aumenta el inventario de la mascota y elimina la bolsa
 router.post('/:id/complete', async (req, res, next) => {
   try {
     const bag = await Bag.findOne({ _id: req.params.id, user: req.user._id }).populate('pet');
@@ -174,11 +174,10 @@ router.post('/:id/complete', async (req, res, next) => {
       return res.status(400).json({ message: 'La bolsa debe estar asociada a una mascota para completarla' });
     }
 
-    // Marcar como completada y sumar al inventario total de la mascota
-    bag.isComplete = true;
-    await bag.save();
+    const quantity = bag.quantity;
+    const petName = bag.pet.name;
 
-    // Aumentar el inventario total de la mascota
+    // Aumentar el inventario total de la mascota ANTES de eliminar la bolsa
     bag.pet.totalInventory += bag.quantity;
     await bag.pet.save();
 
@@ -187,14 +186,13 @@ router.post('/:id/complete', async (req, res, next) => {
     consumptionDate.setHours(0, 0, 0, 0); // Solo la fecha, sin hora
 
     for (const ingredientBag of bag.ingredients) {
-      // Validar que tenemos un ingrediente válido
       if (ingredientBag.ingredient) {
         await ConsumptionHistory.create({
           user: req.user._id,
           pet: bag.pet._id,
           ingredient: ingredientBag.ingredient,
           bag: bag._id,
-          gramsConsumed: 0, // Se agregó al inventario, no se consumió
+          gramsConsumed: 0,
           bagsConsumed: 0,
           consumptionDate,
           consumptionType: 'inventory_add'
@@ -202,11 +200,12 @@ router.post('/:id/complete', async (req, res, next) => {
       }
     }
 
-    const populated = await bag.populate('ingredients.ingredient');
+    // Eliminar la bolsa completamente
+    await Bag.deleteOne({ _id: bag._id });
+
     res.json({
-      bag: populated,
       newInventory: bag.pet.totalInventory,
-      message: `${bag.quantity} bolsas agregadas al inventario de ${bag.pet.name}`
+      message: `${quantity} bolsas agregadas al inventario de ${petName}`
     });
   } catch (error) {
     next(error);

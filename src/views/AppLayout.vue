@@ -136,6 +136,7 @@ const isActive = (path) => {
             :to="item.to" 
             class="bottom-nav-item"
             :class="{ active: isActive(item.to) }"
+            :aria-current="isActive(item.to) ? 'page' : undefined"
           >
             <i :class="['bi', item.icon]"></i>
             <span>{{ item.label }}</span>

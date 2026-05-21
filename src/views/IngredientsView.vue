@@ -1,5 +1,5 @@
 <script setup>
-import { onMounted, ref } from 'vue';
+import { onMounted, ref, computed } from 'vue';
 import api from '../api/client.js';
 import { useToastStore } from '../stores/toast.js';
 
@@ -10,6 +10,15 @@ const loading = ref(false);
 const saving = ref(false);
 const error = ref('');
 const success = ref('');
+const searchQuery = ref('');
+
+const filteredIngredients = computed(() => {
+  if (!searchQuery.value.trim()) return ingredients.value;
+  const query = searchQuery.value.toLowerCase();
+  return ingredients.value.filter(i => 
+    i.name.toLowerCase().includes(query) || i.code.toLowerCase().includes(query)
+  );
+});
 
 const form = ref({
   id: null,
@@ -168,6 +177,31 @@ onMounted(loadIngredients);
         </span>
       </div>
       <div class="card-body p-0">
+        <!-- Search -->
+        <div class="p-3" style="border-bottom: 1px solid var(--color-border);">
+          <div class="input-group">
+            <span class="input-group-text" style="background-color: var(--color-muted); border-color: var(--color-border-strong);">
+              <i class="bi bi-search"></i>
+            </span>
+            <input
+              v-model="searchQuery"
+              type="text"
+              class="form-control"
+              placeholder="Buscar ingrediente..."
+              style="border-color: var(--color-border-strong);"
+            />
+            <button
+              v-if="searchQuery"
+              type="button"
+              class="btn btn-outline-secondary"
+              @click="searchQuery = ''"
+              aria-label="Limpiar búsqueda"
+            >
+              <i class="bi bi-x"></i>
+            </button>
+          </div>
+        </div>
+
         <div v-if="!ingredients.length && !loading" class="text-center py-5">
           <i class="bi bi-inbox mb-3" style="font-size: 3rem; color: var(--color-text-muted);"></i>
           <p class="mb-0" style="color: var(--color-text-secondary);">
@@ -178,7 +212,7 @@ onMounted(loadIngredients);
         <template v-else>
           <!-- Mobile Cards -->
           <div class="d-md-none">
-            <div v-for="ingredient in ingredients" :key="ingredient._id" class="ingredient-item mx-3 mt-3">
+            <div v-for="ingredient in filteredIngredients" :key="ingredient._id" class="ingredient-item mx-3 mt-3">
               <div class="card">
                 <div class="card-body d-flex justify-content-between align-items-center">
                   <div>
@@ -220,7 +254,7 @@ onMounted(loadIngredients);
                   </tr>
                 </thead>
                 <tbody>
-                  <tr v-for="ingredient in ingredients" :key="ingredient._id">
+                  <tr v-for="ingredient in filteredIngredients" :key="ingredient._id">
                     <td class="fw-semibold">{{ ingredient.name }}</td>
                     <td><code>{{ ingredient.code }}</code></td>
                     <td>

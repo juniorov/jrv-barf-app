@@ -215,6 +215,27 @@ const shoppingSummaryText = computed(() => {
     .join('\n');
 });
 
+const editablePortions = computed(() => {
+  const map = {};
+  totals.value.forEach(row => {
+    const pet = pets.value.find(p => p._id === row.petId);
+    if (!pet || !pet.ingredients) return;
+    const ing = pet.ingredients.find(i => i.ingredient._id === row.ingredientId);
+    if (!ing) return;
+    map[`${row.petId}-${row.ingredientId}`] = ing;
+  });
+  return map;
+});
+
+const updateDesiredPortions = (petId, ingredientId, value) => {
+  const pet = pets.value.find(p => p._id === petId);
+  if (!pet || !pet.ingredients) return;
+  const ing = pet.ingredients.find(i => i.ingredient._id === ingredientId);
+  if (ing) {
+    ing.desiredPortions = Number(value) || 0;
+  }
+};
+
 const copyShoppingList = async () => {
   try {
     await navigator.clipboard.writeText(shoppingSummaryText.value);
@@ -306,12 +327,8 @@ onMounted(loadPets);
                     <div class="col-6">
                       <label class="form-label d-block">Porciones deseadas</label>
                       <input
-                        v-model.number="
-                          pets
-                            .find(p => p._id === row.petId)
-                            .ingredients.find(i => i.ingredient._id === row.ingredientId)
-                            .desiredPortions
-                        "
+                        :value="editablePortions[`${row.petId}-${row.ingredientId}`]?.desiredPortions || 0"
+                        @input="updateDesiredPortions(row.petId, row.ingredientId, $event.target.value)"
                         type="number"
                         min="0"
                         class="form-control"
@@ -368,12 +385,8 @@ onMounted(loadPets);
                     <td>{{ row.gramsPerPortion }} g</td>
                     <td style="max-width: 120px;">
                       <input
-                        v-model.number="
-                          pets
-                            .find(p => p._id === row.petId)
-                            .ingredients.find(i => i.ingredient._id === row.ingredientId)
-                            .desiredPortions
-                        "
+                        :value="editablePortions[`${row.petId}-${row.ingredientId}`]?.desiredPortions || 0"
+                        @input="updateDesiredPortions(row.petId, row.ingredientId, $event.target.value)"
                         type="number"
                         min="0"
                         class="form-control form-control-sm"

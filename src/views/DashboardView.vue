@@ -4,6 +4,7 @@ import api from '../api/client.js';
 import { useBagStore } from '../stores/bags.js';
 import { useToastStore } from '../stores/toast.js';
 import { calculateAge, calculateRealAge } from '../utils/age.js';
+import SkeletonCard from '../components/SkeletonCard.vue';
 
 const bagStore = useBagStore();
 const toast = useToastStore();
@@ -16,6 +17,7 @@ const inventoryStatus = ref([]);
 const forceUpdateLoading = ref({});
 const autoUpdateInterval = ref(null);
 const lastDashboardUpdate = ref(null);
+const autoUpdateEnabled = ref(true);
 
 const getPetAge = (pet) => {
   if (pet.birthDate) {
@@ -97,19 +99,17 @@ const updateInventoryStatus = async () => {
   }
 };
 
-// Iniciar actualización automática cada 30 segundos
+// Iniciar actualización automática cada 60 segundos
 const startAutoUpdate = () => {
-  // Limpiar intervalo existente si hay uno
   if (autoUpdateInterval.value) {
     clearInterval(autoUpdateInterval.value);
   }
 
-  // Actualizar cada 30 segundos solo el status de inventario
   autoUpdateInterval.value = setInterval(() => {
-    if (document.visibilityState === 'visible') {
+    if (autoUpdateEnabled.value && document.visibilityState === 'visible') {
       updateInventoryStatus();
     }
-  }, 30000); // 30 segundos
+  }, 60000); // 60 segundos
 };
 
 // Parar actualización automática
@@ -117,6 +117,24 @@ const stopAutoUpdate = () => {
   if (autoUpdateInterval.value) {
     clearInterval(autoUpdateInterval.value);
     autoUpdateInterval.value = null;
+  }
+};
+
+const toggleAutoUpdate = () => {
+  autoUpdateEnabled.value = !autoUpdateEnabled.value;
+  if (autoUpdateEnabled.value) {
+    toast.info('Auto-actualización activada');
+  } else {
+    toast.info('Auto-actualización pausada');
+  }
+};
+
+// Pausar cuando la pestaña está en background
+const handleVisibilityChange = () => {
+  if (document.visibilityState === 'hidden') {
+    stopAutoUpdate();
+  } else if (autoUpdateEnabled.value) {
+    startAutoUpdate();
   }
 };
 
@@ -131,10 +149,12 @@ watch(() => bagStore.needsRefresh, (needsRefresh) => {
 onMounted(async () => {
   await loadDashboardData();
   startAutoUpdate();
+  document.addEventListener('visibilitychange', handleVisibilityChange);
 });
 
 onUnmounted(() => {
   stopAutoUpdate();
+  document.removeEventListener('visibilitychange', handleVisibilityChange);
 });
 </script>
 
@@ -146,22 +166,39 @@ onUnmounted(() => {
         <h1 class="h3 mb-1" style="color: var(--color-text-primary);">Dashboard</h1>
         <small style="color: var(--color-text-secondary);">
           <i class="bi bi-arrow-repeat me-1"></i>
-          Auto cada 30s
-          <span v-if="lastDashboardUpdate" class="text-success ms-1">
+          Auto cada 60s
+          <span v-if="autoUpdateEnabled" class="text-success ms-1">
+            <i class="bi bi-circle-fill" style="font-size: 0.5rem;"></i>
+          </span>
+          <span v-else class="text-warning ms-1">
+            <i class="bi bi-pause-circle-fill" style="font-size: 0.6rem;"></i> Pausado
+          </span>
+          <span v-if="lastDashboardUpdate" class="ms-1">
             · {{ lastDashboardUpdate.toLocaleTimeString() }}
           </span>
         </small>
       </div>
-      <button 
-        class="btn btn-outline-primary btn-sm" 
-        @click="loadDashboardData" 
-        :disabled="loading"
-        aria-label="Actualizar dashboard"
-      >
-        <span v-if="loading" class="spinner-border spinner-border-sm me-1" role="status"></span>
-        <i v-else class="bi bi-arrow-clockwise me-1"></i>
-        <span class="d-none d-sm-inline">{{ loading ? 'Actualizando...' : 'Actualizar' }}</span>
-      </button>
+      <div class="d-flex gap-2">
+        <button 
+          class="btn btn-sm"
+          :class="autoUpdateEnabled ? 'btn-outline-success' : 'btn-outline-warning'"
+          @click="toggleAutoUpdate"
+          :aria-label="autoUpdateEnabled ? 'Pausar auto-actualización' : 'Reanudar auto-actualización'"
+        >
+          <i :class="autoUpdateEnabled ? 'bi bi-pause' : 'bi bi-play-fill'"></i>
+          <span class="d-none d-sm-inline ms-1">{{ autoUpdateEnabled ? 'Pausar' : 'Reanudar' }}</span>
+        </button>
+        <button 
+          class="btn btn-outline-primary btn-sm" 
+          @click="loadDashboardData" 
+          :disabled="loading"
+          aria-label="Actualizar dashboard"
+        >
+          <span v-if="loading" class="spinner-border spinner-border-sm me-1" role="status"></span>
+          <i v-else class="bi bi-arrow-clockwise me-1"></i>
+          <span class="d-none d-sm-inline">{{ loading ? 'Actualizando...' : 'Actualizar' }}</span>
+        </button>
+      </div>
     </div>
 
     <!-- Error message -->
@@ -171,9 +208,13 @@ onUnmounted(() => {
     </div>
 
     <!-- Loading state -->
-    <div v-if="loading && petStatistics.length === 0" class="text-center py-5">
-      <div class="spinner-border mb-3" role="status" style="color: var(--color-primary);"></div>
-      <p style="color: var(--color-text-secondary);">Cargando estadísticas...</p>
+    <div v-if="loading && petStatistics.length === 0" class="row g-3 g-md-4">
+      <div class="col-12 col-md-6">
+        <SkeletonCard />
+      </div>
+      <div class="col-12 col-md-6">
+        <SkeletonCard />
+      </div>
     </div>
 
     <!-- Dashboard content -->

@@ -17,6 +17,15 @@ const managingIngredients = ref(null);
 const petIngredients = ref([]);
 const error = ref('');
 const success = ref('');
+const searchQuery = ref('');
+
+const filteredPets = computed(() => {
+  if (!searchQuery.value.trim()) return pets.value;
+  const query = searchQuery.value.toLowerCase();
+  return pets.value.filter(p => 
+    p.name.toLowerCase().includes(query)
+  );
+});
 
 const form = ref({
   id: null,
@@ -110,13 +119,29 @@ const onSubmit = async () => {
       return;
     }
 
+    if (form.value.mealsPerDay < 1) {
+      error.value = 'Las comidas al día deben ser al menos 1';
+      return;
+    }
+
+    // Validate feeding times format
+    if (form.value.feedingTimesText.trim()) {
+      const times = form.value.feedingTimesText.split(',').map(t => t.trim()).filter(t => t);
+      const timeRegex = /^([01]\d|2[0-3]):[0-5]\d$/;
+      const invalidTimes = times.filter(t => !timeRegex.test(t));
+      if (invalidTimes.length > 0) {
+        error.value = `Horarios inválidos: ${invalidTimes.join(', ')}. Usa formato HH:MM (ej: 08:00, 14:00)`;
+        return;
+      }
+    }
+
     const calculatedAgeValue = calculateAge(form.value.birthDate);
 
     const payload = {
       name: form.value.name,
-      birthDate: form.value.birthDate, // Enviar como string ISO
-      age: Number(calculatedAgeValue.toFixed(1)), // Calcular y enviar edad
-      mealsPerDay: Number(form.value.mealsPerDay || 0),
+      birthDate: form.value.birthDate,
+      age: Number(calculatedAgeValue.toFixed(1)),
+      mealsPerDay: Number(form.value.mealsPerDay || 1),
       maxIngredientsPerBag: Number(form.value.maxIngredientsPerBag || 5),
       feedingTimes: form.value.feedingTimesText
         .split(',')
@@ -213,6 +238,12 @@ const startManageIngredients = async (pet) => {
         desiredPortions: existing ? existing.desiredPortions || 0 : 0
       };
     });
+
+    // Focus first input after modal opens
+    setTimeout(() => {
+      const firstInput = document.querySelector('.modal input[type="checkbox"]');
+      if (firstInput) firstInput.focus();
+    }, 100);
   } catch (e) {
     error.value = e.message || 'No se pudieron cargar los ingredientes de la mascota';
   }
@@ -245,6 +276,9 @@ const savePetIngredients = async () => {
 const cancelManageIngredients = () => {
   managingIngredients.value = null;
   petIngredients.value = [];
+  // Restore focus to the triggering button
+  const triggerBtn = document.querySelector('[data-manage-ingredients]');
+  if (triggerBtn) triggerBtn.focus();
 };
 
 onMounted(() => {
@@ -360,6 +394,34 @@ onMounted(() => {
         </span>
       </div>
       <div class="card-body p-0">
+        <!-- Search -->
+        <div class="p-3" style="border-bottom: 1px solid var(--color-border);">
+          <div class="input-group">
+            <span class="input-group-text" style="background-color: var(--color-muted); border-color: var(--color-border-strong);">
+              <i class="bi bi-search"></i>
+            </span>
+            <input
+              v-model="searchQuery"
+              type="text"
+              class="form-control"
+              placeholder="Buscar mascota..."
+              style="border-color: var(--color-border-strong);"
+            />
+            <button
+              v-if="searchQuery"
+              type="button"
+              class="btn btn-outline-secondary"
+              @click="searchQuery = ''"
+              aria-label="Limpiar búsqueda"
+            >
+              <i class="bi bi-x"></i>
+            </button>
+          </div>
+          <div v-if="searchQuery && filteredPets.length === 0" class="mt-2 small" style="color: var(--color-text-muted);">
+            No se encontraron resultados para "{{ searchQuery }}"
+          </div>
+        </div>
+
         <div v-if="!pets.length && !loading" class="text-center py-5">
           <i class="bi bi-inbox mb-3" style="font-size: 3rem; color: var(--color-text-muted);"></i>
           <p class="mb-0" style="color: var(--color-text-secondary);">
@@ -368,8 +430,15 @@ onMounted(() => {
         </div>
         
         <!-- Mobile Cards View -->
+        <div v-else-if="filteredPets.length === 0 && searchQuery" class="text-center py-5">
+          <i class="bi bi-search mb-3" style="font-size: 3rem; color: var(--color-text-muted);"></i>
+          <p class="mb-0" style="color: var(--color-text-secondary);">
+            No se encontraron mascotas
+          </p>
+        </div>
+        
         <div v-else class="d-md-none">
-          <div v-for="pet in pets" :key="pet._id" class="pet-card">
+          <div v-for="pet in filteredPets" :key="pet._id" class="pet-card">
             <div class="card m-3">
               <!-- Pet Header -->
               <div class="card-header" style="background-color: var(--color-muted);">
@@ -465,6 +534,7 @@ onMounted(() => {
                     <button
                       type="button"
                       class="btn btn-outline-info btn-sm"
+                      data-manage-ingredients
                       @click="startManageIngredients(pet)"
                     >
                       <i class="bi bi-gear me-1"></i>Gestionar
@@ -540,7 +610,7 @@ onMounted(() => {
                 </tr>
               </thead>
               <tbody>
-                <tr v-for="pet in pets" :key="pet._id">
+                <tr v-for="pet in filteredPets" :key="pet._id">
                   <td class="fw-semibold">{{ pet.name }}</td>
                   <td>{{ getPetAge(pet).toFixed(1) }} años</td>
                   <td>{{ pet.mealsPerDay ?? 0 }}</td>
@@ -599,6 +669,7 @@ onMounted(() => {
                       <button
                         type="button"
                         class="btn btn-outline-info btn-sm"
+                        data-manage-ingredients
                         @click="startManageIngredients(pet)"
                       >
                         Gestionar
@@ -640,11 +711,21 @@ onMounted(() => {
     </div>
 
     <!-- Ingredients Modal -->
-    <div v-if="managingIngredients" class="modal d-block" style="background: rgba(0,0,0,0.5); z-index: var(--z-modal);">
+    <div
+      v-if="managingIngredients"
+      class="modal d-block"
+      style="background: rgba(0,0,0,0.5); z-index: var(--z-modal);"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="modal-title"
+      tabindex="-1"
+      @keydown.escape="cancelManageIngredients"
+      @click.self="cancelManageIngredients"
+    >
       <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
         <div class="modal-content">
           <div class="modal-header">
-            <h5 class="modal-title">
+            <h5 class="modal-title" id="modal-title">
               <i class="bi bi-grid me-2" style="color: var(--color-primary);"></i>
               Gestionar Ingredientes
             </h5>

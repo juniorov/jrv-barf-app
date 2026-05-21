@@ -26,49 +26,68 @@ const onSubmit = async () => {
 </script>
 
 <template>
-  <div class="d-flex align-items-center justify-content-center min-vh-100 bg-light">
-    <div class="card shadow-sm" style="min-width: 360px; max-width: 420px;">
-      <div class="card-body">
-        <h1 class="h4 mb-3 text-center">JRV BARF - Iniciar sesión</h1>
-
-        <p class="text-muted small text-center mb-4">
-          Gestiona ingredientes, bolsas y compras para tu dieta BARF.
-        </p>
-
-        <div v-if="error" class="alert alert-danger py-2">{{ error }}</div>
-
-        <form @submit.prevent="onSubmit" novalidate>
-          <div class="mb-3">
-            <label class="form-label">Correo electrónico</label>
-            <input
-              v-model="email"
-              type="email"
-              class="form-control"
-              autocomplete="email"
-              required
-            />
-          </div>
-          <div class="mb-3">
-            <label class="form-label">Contraseña</label>
-            <input
-              v-model="password"
-              type="password"
-              class="form-control"
-              autocomplete="current-password"
-              required
-              minlength="6"
-            />
+  <div class="auth-page d-flex align-items-center justify-content-center" style="min-height: 100dvh; background: linear-gradient(135deg, #D1FAE5 0%, #E0F2FE 100%);">
+    <div class="auth-card fade-in" style="width: 100%; max-width: 420px; padding: 0 var(--spacing-4);">
+      <div class="card shadow-lg">
+        <div class="card-body p-4 p-md-5">
+          <!-- Logo/Header -->
+          <div class="text-center mb-4">
+            <div class="mb-3" style="width: 64px; height: 64px; margin: 0 auto; background-color: var(--color-primary); border-radius: var(--radius-xl); display: flex; align-items: center; justify-content: center;">
+              <i class="bi bi-heart-fill text-white fs-3"></i>
+            </div>
+            <h1 class="h4 mb-1" style="color: var(--color-text-primary);">JRV BARF</h1>
+            <p class="mb-0" style="color: var(--color-text-secondary); font-size: var(--font-size-sm);">
+              Gestiona la alimentación de tus mascotas
+            </p>
           </div>
 
-          <button type="submit" class="btn btn-primary w-100" :disabled="auth.loading">
-            <span v-if="auth.loading" class="spinner-border spinner-border-sm me-2" />
-            Entrar
-          </button>
-        </form>
+          <!-- Error Alert -->
+          <div v-if="error" class="alert alert-danger mb-4" role="alert">
+            <i class="bi bi-exclamation-circle me-2"></i>
+            {{ error }}
+          </div>
 
-        <div class="mt-3 d-flex justify-content-between">
-          <RouterLink to="/register" class="small">Crear cuenta</RouterLink>
-          <RouterLink to="/forgot-password" class="small">¿Olvidaste tu contraseña?</RouterLink>
+          <!-- Login Form -->
+          <form @submit.prevent="onSubmit" novalidate>
+            <div class="mb-3">
+              <label class="form-label">Correo electrónico</label>
+              <input
+                v-model="email"
+                type="email"
+                class="form-control"
+                autocomplete="email"
+                required
+                placeholder="tu@email.com"
+              />
+            </div>
+            <div class="mb-4">
+              <label class="form-label">Contraseña</label>
+              <input
+                v-model="password"
+                type="password"
+                class="form-control"
+                autocomplete="current-password"
+                required
+                minlength="6"
+                placeholder="••••••••"
+              />
+            </div>
+
+            <button type="submit" class="btn btn-primary w-100 mb-3" :disabled="auth.loading">
+              <span v-if="auth.loading" class="spinner-border spinner-border-sm me-2" />
+              Iniciar Sesión
+            </button>
+          </form>
+
+          <!-- Links -->
+          <div class="d-flex justify-content-between align-items-center pt-3" style="border-top: 1px solid var(--color-border);">
+            <RouterLink to="/register" class="text-decoration-none" style="color: var(--color-primary); font-size: var(--font-size-sm); font-weight: 500;">
+              <i class="bi bi-person-plus me-1"></i>Crear cuenta
+            </RouterLink>
+            <RouterLink to="/forgot-password" class="text-decoration-none" style="color: var(--color-text-secondary); font-size: var(--font-size-sm);">
+              ¿Olvidaste tu contraseña?
+            </RouterLink>
+          </div>
         </div>
       </div>
     </div>

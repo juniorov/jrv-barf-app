@@ -96,96 +96,149 @@ onMounted(loadIngredients);
 </script>
 
 <template>
-  <div>
-    <div class="d-flex justify-content-between align-items-center mb-3">
-      <h2 class="h4 mb-0">Ingredientes</h2>
+  <div class="fade-in">
+    <!-- Header -->
+    <div class="mb-4">
+      <h2 class="h4 mb-1" style="color: var(--color-text-primary);">Ingredientes</h2>
+      <p class="mb-0" style="color: var(--color-text-secondary); font-size: var(--font-size-sm);">
+        Gestiona los ingredientes disponibles
+      </p>
     </div>
 
-    <p class="text-muted small mb-3">
-      Gestiona los ingredientes disponibles y su código interno.
-    </p>
+    <!-- Alerts -->
+    <div v-if="error" class="alert alert-danger mb-3">{{ error }}</div>
+    <div v-if="success" class="alert alert-success mb-3">{{ success }}</div>
 
-    <div v-if="error" class="alert alert-danger py-2">{{ error }}</div>
-    <div v-if="success" class="alert alert-success py-2">{{ success }}</div>
-
+    <!-- Form Card -->
     <div class="card mb-4">
-      <div class="card-body">
-        <h3 class="h6 mb-3">
+      <div class="card-header">
+        <h3 class="h6 mb-0" style="color: var(--color-text-primary);">
+          <i class="bi bi-plus-circle me-2" style="color: var(--color-primary);"></i>
           {{ form.id ? 'Editar ingrediente' : 'Nuevo ingrediente' }}
         </h3>
-        <form @submit.prevent="onSubmit" class="row g-3">
-          <div class="col-md-5">
-            <label class="form-label">Nombre</label>
-            <input
-              v-model="form.name"
-              type="text"
-              class="form-control"
-              required
-              placeholder="Ej: Pollo"
-            />
-          </div>
-          <div class="col-md-5">
-            <label class="form-label">Código interno</label>
-            <input
-              v-model="form.code"
-              type="text"
-              class="form-control"
-              required
-              placeholder="Ej: POLLO"
-            />
-          </div>
-          <div class="col-md-2 d-flex align-items-end">
-            <button type="submit" class="btn btn-primary w-100" :disabled="saving">
-              <span v-if="saving" class="spinner-border spinner-border-sm me-1" />
-              {{ form.id ? 'Guardar' : 'Añadir' }}
-            </button>
+      </div>
+      <div class="card-body">
+        <form @submit.prevent="onSubmit">
+          <div class="row g-3">
+            <div class="col-12 col-md-5">
+              <label class="form-label">Nombre</label>
+              <input
+                v-model="form.name"
+                type="text"
+                class="form-control"
+                required
+                placeholder="Ej: Pollo"
+              />
+            </div>
+            <div class="col-12 col-md-5">
+              <label class="form-label">Código interno</label>
+              <input
+                v-model="form.code"
+                type="text"
+                class="form-control"
+                required
+                placeholder="Ej: POLLO"
+              />
+            </div>
+            <div class="col-12 col-md-2">
+              <button type="submit" class="btn btn-primary w-100" :disabled="saving">
+                <span v-if="saving" class="spinner-border spinner-border-sm me-2" />
+                {{ form.id ? 'Guardar' : 'Añadir' }}
+              </button>
+            </div>
           </div>
         </form>
       </div>
     </div>
 
+    <!-- Ingredients List -->
     <div class="card">
-      <div class="card-body">
-        <div class="d-flex justify-content-between align-items-center mb-2">
-          <h3 class="h6 mb-0">Listado de ingredientes</h3>
-          <span v-if="loading" class="small text-muted">Cargando...</span>
+      <div class="card-header d-flex justify-content-between align-items-center">
+        <h3 class="h6 mb-0">Listado de Ingredientes</h3>
+        <span v-if="loading" class="small" style="color: var(--color-text-secondary);">
+          <span class="spinner-border spinner-border-sm me-1"></span>Cargando...
+        </span>
+      </div>
+      <div class="card-body p-0">
+        <div v-if="!ingredients.length && !loading" class="text-center py-5">
+          <i class="bi bi-inbox mb-3" style="font-size: 3rem; color: var(--color-text-muted);"></i>
+          <p class="mb-0" style="color: var(--color-text-secondary);">
+            No hay ingredientes aún. Crea el primero.
+          </p>
         </div>
-        <div v-if="!ingredients.length && !loading" class="text-muted small">
-          No hay ingredientes aún. Crea el primero con el formulario superior.
-        </div>
-        <div class="table-responsive" v-else>
-          <table class="table table-sm align-middle">
-            <thead>
-              <tr>
-                <th>Nombre</th>
-                <th>Código</th>
-                <th>Acciones</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-for="ingredient in ingredients" :key="ingredient._id">
-                <td>{{ ingredient.name }}</td>
-                <td>{{ ingredient.code }}</td>
-                <td>
-                  <button
-                    type="button"
-                    class="btn btn-outline-secondary btn-sm me-2"
-                    @click="editIngredient(ingredient)"
-                  >
-                    Editar
-                  </button>
-                  <button
-                    type="button"
-                    class="btn btn-outline-danger btn-sm"
-                    @click="deleteIngredient(ingredient)"
-                  >
-                    Eliminar
-                  </button>
-                </td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
+        
+        <template v-else>
+          <!-- Mobile Cards -->
+          <div class="d-md-none">
+            <div v-for="ingredient in ingredients" :key="ingredient._id" class="ingredient-item mx-3 mt-3">
+              <div class="card">
+                <div class="card-body d-flex justify-content-between align-items-center">
+                  <div>
+                    <h6 class="mb-1 fw-semibold">{{ ingredient.name }}</h6>
+                    <small style="color: var(--color-text-secondary);">Código: <code>{{ ingredient.code }}</code></small>
+                  </div>
+                  <div class="d-flex gap-2">
+                    <button
+                      type="button"
+                      class="btn btn-outline-secondary btn-sm"
+                      @click="editIngredient(ingredient)"
+                      aria-label="Editar"
+                    >
+                      <i class="bi bi-pencil"></i>
+                    </button>
+                    <button
+                      type="button"
+                      class="btn btn-outline-danger btn-sm"
+                      @click="deleteIngredient(ingredient)"
+                      aria-label="Eliminar"
+                    >
+                      <i class="bi bi-trash"></i>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Desktop Table -->
+          <div class="d-none d-md-block">
+            <div class="table-responsive">
+              <table class="table table-sm align-middle mb-0">
+                <thead>
+                  <tr>
+                    <th>Nombre</th>
+                    <th>Código</th>
+                    <th style="width: 180px;">Acciones</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr v-for="ingredient in ingredients" :key="ingredient._id">
+                    <td class="fw-semibold">{{ ingredient.name }}</td>
+                    <td><code>{{ ingredient.code }}</code></td>
+                    <td>
+                      <div class="d-flex gap-2">
+                        <button
+                          type="button"
+                          class="btn btn-outline-secondary btn-sm"
+                          @click="editIngredient(ingredient)"
+                        >
+                          <i class="bi bi-pencil me-1"></i>Editar
+                        </button>
+                        <button
+                          type="button"
+                          class="btn btn-outline-danger btn-sm"
+                          @click="deleteIngredient(ingredient)"
+                        >
+                          <i class="bi bi-trash me-1"></i>Eliminar
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </template>
       </div>
     </div>
   </div>

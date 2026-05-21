@@ -2,7 +2,6 @@ import { Router } from 'express';
 import Pet from '../models/Pet.js';
 import Bag from '../models/Bag.js';
 import Ingredient from '../models/Ingredient.js';
-import ConsumptionHistory from '../models/ConsumptionHistory.js';
 import { authRequired } from '../middleware/auth.js';
 import { applyInventoryAutoUpdateForPet } from './pet.routes.js';
 
@@ -75,60 +74,6 @@ router.get('/pet-statistics', async (req, res, next) => {
     );
 
     res.json(petStatistics);
-  } catch (error) {
-    next(error);
-  }
-});
-
-// Obtener consumo mensual por ingrediente
-router.get('/monthly-consumption', async (req, res, next) => {
-  try {
-    const userId = req.user._id;
-    const { year = new Date().getFullYear(), month = new Date().getMonth() + 1 } = req.query;
-
-    // Crear fechas de inicio y fin del mes
-    const startDate = new Date(parseInt(year), parseInt(month) - 1, 1);
-    const endDate = new Date(parseInt(year), parseInt(month), 0, 23, 59, 59);
-
-    // Buscar el historial de consumo para el mes especificado
-    const consumptionHistory = await ConsumptionHistory.find({
-      user: userId,
-      consumptionDate: {
-        $gte: startDate,
-        $lte: endDate
-      }
-    }).populate('ingredient');
-
-    // Agrupar consumo por ingrediente
-    const monthlyConsumption = {};
-
-    consumptionHistory.forEach(record => {
-      const ingredientName = record.ingredient.name;
-
-      if (!monthlyConsumption[ingredientName]) {
-        monthlyConsumption[ingredientName] = 0;
-      }
-
-      monthlyConsumption[ingredientName] += record.gramsConsumed;
-    });
-
-    // Convertir a formato deseado (gramos o kg)
-    const formattedConsumption = Object.entries(monthlyConsumption)
-      .filter(([_, grams]) => grams > 0)
-      .map(([ingredient, grams]) => ({
-        ingredient,
-        amount: grams >= 1000 ? `${(grams / 1000).toFixed(2)} kg` : `${Math.round(grams)} g`,
-        gramsTotal: Math.round(grams)
-      }))
-      .sort((a, b) => b.gramsTotal - a.gramsTotal); // Ordenar por cantidad descendente
-
-    res.json({
-      year: parseInt(year),
-      month: parseInt(month),
-      monthName: startDate.toLocaleDateString('es-ES', { month: 'long' }),
-      consumption: formattedConsumption,
-      hasData: formattedConsumption.length > 0
-    });
   } catch (error) {
     next(error);
   }

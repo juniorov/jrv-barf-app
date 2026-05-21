@@ -2,8 +2,10 @@
 import { onMounted, ref, computed } from 'vue';
 import api from '../api/client.js';
 import { useAuthStore } from '../stores/auth.js';
+import { useBagStore } from '../stores/bags.js';
 
 const auth = useAuthStore();
+const bagStore = useBagStore();
 
 const ingredients = ref([]);
 const pets = ref([]);
@@ -218,6 +220,8 @@ const completeBag = async (bag) => {
     // Remover la bolsa de la lista inmediatamente tras éxito
     bags.value = bags.value.filter((b) => b._id !== bag._id);
 
+    bagStore.markUpdated();
+
     success.value = `✅ ${response.message || 'Bolsa completada correctamente y removida de la lista'}`;
 
     // Limpiar mensaje después de 3 segundos
@@ -238,269 +242,284 @@ onMounted(loadData);
 </script>
 
 <template>
-  <div>
-    <div class="d-flex justify-content-between align-items-center mb-3">
-      <h2 class="h4 mb-0">Bolsas incompletas</h2>
-      <div class="d-flex gap-2">
-        <span v-if="form.petId" class="badge bg-success">
+  <div class="fade-in">
+    <!-- Header -->
+    <div class="mb-4">
+      <div class="d-flex justify-content-between align-items-start">
+        <div>
+          <h2 class="h4 mb-1" style="color: var(--color-text-primary);">Bolsas Incompletas</h2>
+          <p class="mb-0" style="color: var(--color-text-secondary); font-size: var(--font-size-sm);">
+            Define y gestiona las bolsas de comida
+          </p>
+        </div>
+        <div v-if="form.petId" class="badge" style="background-color: var(--color-success-bg); color: var(--color-success);">
           <i class="bi bi-heart-fill me-1"></i>
           {{ pets.find(p => p._id === form.petId)?.name }}
-          (Máx. {{ maxIngredientsPerBag }})
-        </span>
+        </div>
       </div>
     </div>
 
-    <p class="text-muted small mb-3">
-      Define bolsas o platos indicando qué ingredientes llevan y en qué cantidad.
-      <strong>Selecciona una mascota</strong> para aplicar sus configuraciones específicas.
-      Márcalas como completadas para actualizar el inventario.
-    </p>
+    <!-- Alerts -->
+    <div v-if="error" class="alert alert-danger mb-3">{{ error }}</div>
+    <div v-if="success" class="alert alert-success mb-3">{{ success }}</div>
 
-    <div v-if="error" class="alert alert-danger py-2">{{ error }}</div>
-    <div v-if="success" class="alert alert-success py-2">{{ success }}</div>
-
-    <!-- Formulario -->
+    <!-- Form -->
     <div class="card mb-4">
-      <div class="card-body">
-        <h3 class="h6 mb-3">
-          {{ form.id ? 'Editar bolsa incompleta' : 'Nueva bolsa incompleta' }}
+      <div class="card-header">
+        <h3 class="h6 mb-0" style="color: var(--color-text-primary);">
+          <i class="bi bi-plus-circle me-2" style="color: var(--color-primary);"></i>
+          {{ form.id ? 'Editar bolsa' : 'Nueva bolsa' }}
         </h3>
-        <form @submit.prevent="onSubmit" class="row g-3">
-          <div class="col-md-4">
-            <label class="form-label">Nombre de la bolsa</label>
-            <input
-              v-model="form.name"
-              type="text"
-              class="form-control"
-              required
-              placeholder="Ej: Bolsa de pollo y ternera"
-            />
-          </div>
-          <div class="col-md-2">
-            <label class="form-label">Cantidad de bolsas</label>
-            <input
-              v-model.number="form.quantity"
-              type="number"
-              min="1"
-              class="form-control"
-              required
-            />
-          </div>
-          <div class="col-md-3">
-            <label class="form-label">Mascota</label>
-            <select v-model="form.petId" class="form-select" @change="updateSelectionsForPet">
-              <option :value="null">Sin mascota asociada</option>
-              <option v-for="pet in pets" :key="pet._id" :value="pet._id">
-                {{ pet.name }}
-              </option>
-            </select>
-          </div>
-          <div class="col-md-12">
-            <label class="form-label d-flex justify-content-between">
-              <span>Ingredientes de la bolsa</span>
-              <span class="small text-muted">
-                Seleccionados: {{ selectedCount }} / {{ maxIngredientsPerBag }}
-              </span>
-            </label>
-            <div v-if="!form.petId" class="alert alert-info py-2 small">
-              Selecciona una mascota para ver sus ingredientes disponibles.
+      </div>
+      <div class="card-body">
+        <form @submit.prevent="onSubmit">
+          <div class="row g-3">
+            <div class="col-12 col-md-4">
+              <label class="form-label">Nombre</label>
+              <input
+                v-model="form.name"
+                type="text"
+                class="form-control"
+                required
+                placeholder="Ej: Bolsa de pollo"
+              />
             </div>
-            <div v-else-if="availableIngredients.length === 0" class="alert alert-warning py-2 small">
-              La mascota seleccionada no tiene ingredientes asignados. Ve a la sección de Mascotas para asignar ingredientes.
+            <div class="col-6 col-md-2">
+              <label class="form-label">Cantidad</label>
+              <input
+                v-model.number="form.quantity"
+                type="number"
+                min="1"
+                class="form-control"
+                required
+              />
             </div>
-            <div v-else class="table-responsive">
-              <table class="table table-sm align-middle mb-0">
-                <thead>
-                  <tr>
-                    <th style="width: 40px;">Usar</th>
-                    <th>Ingrediente</th>
-                    <th>Gramos por bolsa</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr v-for="selection in form.selections" :key="selection.ingredientId">
-                    <td>
-                      <input
-                        v-model="selection.selected"
-                        type="checkbox"
-                        class="form-check-input"
-                      />
-                    </td>
-                    <td>
-                      {{
-                        availableIngredients.find((i) => i.ingredient._id === selection.ingredientId)?.ingredient?.name ||
-                        'Ingrediente no encontrado'
-                      }}
-                    </td>
-                    <td>
-                      <input
-                        v-model.number="selection.gramsPerBag"
-                        type="number"
-                        min="0"
-                        class="form-control form-control-sm"
-                        :disabled="!selection.selected"
-                      />
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
+            <div class="col-6 col-md-3">
+              <label class="form-label">Mascota</label>
+              <select v-model="form.petId" class="form-select" @change="updateSelectionsForPet">
+                <option :value="null">Seleccionar...</option>
+                <option v-for="pet in pets" :key="pet._id" :value="pet._id">
+                  {{ pet.name }}
+                </option>
+              </select>
             </div>
-          </div>
-          <div class="col-12 d-flex gap-2 justify-content-end">
-            <button v-if="form.id" type="button" class="btn btn-outline-secondary" @click="resetForm">
-              Cancelar
-            </button>
-            <button type="submit" class="btn btn-primary" :disabled="saving || !form.petId">
-              <span v-if="saving" class="spinner-border spinner-border-sm me-1" />
-              {{ form.id ? 'Guardar cambios' : 'Crear bolsa' }}
-            </button>
+            <div class="col-12" v-if="form.petId">
+              <label class="form-label d-flex justify-content-between">
+                <span>Ingredientes</span>
+                <span style="color: var(--color-text-secondary); font-size: var(--font-size-sm);">
+                  {{ selectedCount }} / {{ maxIngredientsPerBag }}
+                </span>
+              </label>
+              
+              <div v-if="availableIngredients.length === 0" class="alert alert-warning py-2">
+                <i class="bi bi-exclamation-triangle me-2"></i>
+                La mascota no tiene ingredientes asignados
+              </div>
+              
+              <div v-else class="table-responsive">
+                <table class="table table-sm align-middle mb-0">
+                  <thead>
+                    <tr>
+                      <th style="width: 50px;">Usar</th>
+                      <th>Ingrediente</th>
+                      <th style="width: 120px;">Gramos</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr v-for="selection in form.selections" :key="selection.ingredientId">
+                      <td>
+                        <input
+                          v-model="selection.selected"
+                          type="checkbox"
+                          class="form-check-input"
+                          style="width: 20px; height: 20px;"
+                        />
+                      </td>
+                      <td class="fw-semibold">
+                        {{
+                          availableIngredients.find((i) => i.ingredient._id === selection.ingredientId)?.ingredient?.name ||
+                          'No encontrado'
+                        }}
+                      </td>
+                      <td>
+                        <input
+                          v-model.number="selection.gramsPerBag"
+                          type="number"
+                          min="0"
+                          class="form-control form-control-sm"
+                          :disabled="!selection.selected"
+                        />
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+            <div class="col-12" v-else>
+              <div class="alert alert-info py-2">
+                <i class="bi bi-info-circle me-2"></i>
+                Selecciona una mascota para ver sus ingredientes
+              </div>
+            </div>
+            <div class="col-12 d-flex gap-2 justify-content-end">
+              <button v-if="form.id" type="button" class="btn btn-outline-secondary" @click="resetForm">
+                Cancelar
+              </button>
+              <button type="submit" class="btn btn-primary" :disabled="saving || !form.petId">
+                <span v-if="saving" class="spinner-border spinner-border-sm me-2" />
+                {{ form.id ? 'Guardar Cambios' : 'Crear Bolsa' }}
+              </button>
+            </div>
           </div>
         </form>
       </div>
     </div>
 
-    <!-- Listado de bolsas incompletas -->
-    <div class="d-flex justify-content-between align-items-center mb-2">
-      <h3 class="h6 mb-0">Listado</h3>
-      <span v-if="loading" class="small text-muted">
+    <!-- Bags List -->
+    <div class="d-flex justify-content-between align-items-center mb-3">
+      <h3 class="h6 mb-0">Bolsas Existentes</h3>
+      <span v-if="loading" class="small" style="color: var(--color-text-secondary);">
         <span class="spinner-border spinner-border-sm me-1"></span>Cargando...
       </span>
     </div>
 
     <div v-if="!bags.length && !loading" class="text-center py-5">
-      <i class="bi bi-bag text-muted" style="font-size: 2.5rem;"></i>
-      <p class="text-muted mt-2 mb-0">No hay bolsas incompletas actualmente.</p>
+      <i class="bi bi-bag mb-3" style="font-size: 3rem; color: var(--color-text-muted);"></i>
+      <p class="mb-0" style="color: var(--color-text-secondary);">
+        No hay bolsas incompletas
+      </p>
     </div>
 
-    <!-- Vista desktop: tabla -->
-    <div v-else class="d-none d-md-block card">
-      <div class="card-body p-0">
-        <div class="table-responsive">
-          <table class="table table-sm align-middle mb-0">
-            <thead class="table-light">
-              <tr>
-                <th>Nombre</th>
-                <th>Mascota</th>
-                <th>Cantidad</th>
-                <th>Ingredientes</th>
-                <th>Acciones</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-for="bag in bags" :key="bag._id" :class="{ 'table-secondary': completingBags.has(bag._id) }">
-                <td class="fw-semibold">
-                  {{ bag.name }}
-                  <span v-if="completingBags.has(bag._id)" class="text-muted small ms-2">
-                    <i class="bi bi-arrow-clockwise spinning"></i> Completando...
-                  </span>
-                </td>
-                <td>
-                  <span v-if="bag.pet">
-                    <i class="bi bi-heart-fill text-danger me-1 small"></i>{{ bag.pet.name }}
-                  </span>
-                  <span v-else class="text-muted small">—</span>
-                </td>
-                <td>
-                  <span class="badge bg-primary">{{ bag.quantity }}</span>
-                </td>
-                <td>
-                  <div class="small">
-                    <span
-                      v-for="bi in bag.ingredients" :key="bi.ingredient?._id"
-                      class="badge bg-light text-dark border me-1 mb-1"
-                    >
-                      {{ bi.ingredient?.name }} {{ bi.gramsPerBag }}g
-                    </span>
+    <template v-else>
+      <!-- Mobile Cards -->
+      <div class="d-md-none">
+        <div
+          v-for="bag in bags"
+          :key="bag._id"
+          class="bag-card mx-3 mt-3"
+          :class="{ 'completing': completingBags.has(bag._id) }"
+        >
+          <div class="card">
+            <div class="card-header" style="background-color: var(--color-muted);">
+              <div class="d-flex justify-content-between align-items-start">
+                <div>
+                  <div class="fw-semibold">{{ bag.name }}</div>
+                  <div v-if="bag.pet" class="small mt-1" style="color: var(--color-text-secondary);">
+                    <i class="bi bi-heart-fill me-1" style="color: var(--color-primary);"></i>{{ bag.pet.name }}
                   </div>
-                </td>
-                <td>
-                  <button type="button" class="btn btn-outline-secondary btn-sm me-1" aria-label="Editar" @click="editBag(bag)">
-                    <i class="bi bi-pencil"></i>
-                  </button>
-                  <button
-                    type="button"
-                    class="btn btn-outline-success btn-sm me-1"
-                    aria-label="Marcar completada"
-                    @click="completeBag(bag)"
-                    :disabled="completingBags.has(bag._id)"
-                  >
-                    <span v-if="completingBags.has(bag._id)" class="spinner-border spinner-border-sm" role="status"></span>
-                    <i v-else class="bi bi-check-lg"></i>
-                  </button>
-                  <button type="button" class="btn btn-outline-danger btn-sm" aria-label="Eliminar" @click="deleteBag(bag)">
-                    <i class="bi bi-trash"></i>
-                  </button>
-                </td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </div>
-
-    <!-- Vista mobile: cards -->
-    <div v-if="bags.length" class="d-md-none">
-      <div
-        v-for="bag in bags"
-        :key="bag._id"
-        class="bag-card mb-3"
-        :class="{ 'completing': completingBags.has(bag._id) }"
-      >
-        <div class="card">
-          <div class="card-header py-2">
-            <div class="d-flex justify-content-between align-items-start">
-              <div>
-                <div class="fw-semibold">{{ bag.name }}</div>
-                <div v-if="bag.pet" class="small text-muted mt-1">
-                  <i class="bi bi-heart-fill text-danger me-1"></i>{{ bag.pet.name }}
                 </div>
-              </div>
-              <span class="badge bg-primary ms-2">{{ bag.quantity }} bolsas</span>
-            </div>
-          </div>
-          <div class="card-body py-2">
-            <!-- Ingredientes -->
-            <div class="mb-3">
-              <div class="small text-muted mb-1">Ingredientes</div>
-              <div>
-                <span
-                  v-for="bi in bag.ingredients"
-                  :key="bi.ingredient?._id"
-                  class="badge bg-light text-dark border me-1 mb-1"
-                >
-                  {{ bi.ingredient?.name }}
-                  <span class="text-muted">{{ bi.gramsPerBag }}g</span>
+                <span class="badge" style="background-color: var(--color-primary); color: white;">
+                  {{ bag.quantity }} bolsas
                 </span>
               </div>
             </div>
-            <!-- Acciones -->
-            <div class="row g-2">
-              <div class="col-4">
-                <button type="button" class="btn btn-outline-secondary btn-sm w-100" @click="editBag(bag)">
-                  <i class="bi bi-pencil me-1"></i>Editar
-                </button>
+            <div class="card-body">
+              <!-- Ingredients -->
+              <div class="mb-3">
+                <div class="small mb-2" style="color: var(--color-text-secondary);">Ingredientes</div>
+                <div class="d-flex flex-wrap gap-2">
+                  <span
+                    v-for="bi in bag.ingredients"
+                    :key="bi.ingredient?._id"
+                    class="badge"
+                    style="background-color: var(--color-muted); color: var(--color-text-primary); border: 1px solid var(--color-border);"
+                  >
+                    {{ bi.ingredient?.name }} {{ bi.gramsPerBag }}g
+                  </span>
+                </div>
               </div>
-              <div class="col-4">
-                <button
-                  type="button"
-                  class="btn btn-outline-success btn-sm w-100"
-                  @click="completeBag(bag)"
-                  :disabled="completingBags.has(bag._id)"
-                >
-                  <span v-if="completingBags.has(bag._id)" class="spinner-border spinner-border-sm" role="status"></span>
-                  <template v-else><i class="bi bi-check-lg me-1"></i>Completar</template>
-                </button>
-              </div>
-              <div class="col-4">
-                <button type="button" class="btn btn-outline-danger btn-sm w-100" @click="deleteBag(bag)">
-                  <i class="bi bi-trash me-1"></i>Eliminar
-                </button>
-              </div>
+            <!-- Actions -->
+            <div class="d-grid gap-2">
+              <button type="button" class="btn btn-outline-secondary" @click="editBag(bag)">
+                <i class="bi bi-pencil me-1"></i>Editar
+              </button>
+              <button
+                type="button"
+                class="btn btn-outline-success"
+                @click="completeBag(bag)"
+                :disabled="completingBags.has(bag._id)"
+              >
+                <span v-if="completingBags.has(bag._id)" class="spinner-border spinner-border-sm" role="status"></span>
+                <template v-else><i class="bi bi-check-lg me-1"></i>Completar</template>
+              </button>
+              <button type="button" class="btn btn-outline-danger" @click="deleteBag(bag)">
+                <i class="bi bi-trash me-1"></i>Eliminar
+              </button>
+            </div>
             </div>
           </div>
         </div>
       </div>
-    </div>
+
+      <!-- Desktop Table -->
+      <div class="d-none d-md-block card">
+        <div class="card-body p-0">
+          <div class="table-responsive">
+            <table class="table table-sm align-middle mb-0">
+              <thead style="background-color: var(--color-muted);">
+                <tr>
+                  <th>Nombre</th>
+                  <th>Mascota</th>
+                  <th>Cantidad</th>
+                  <th>Ingredientes</th>
+                  <th style="width: 180px;">Acciones</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="bag in bags" :key="bag._id" :class="{ 'table-secondary': completingBags.has(bag._id) }">
+                  <td class="fw-semibold">
+                    {{ bag.name }}
+                    <span v-if="completingBags.has(bag._id)" class="small ms-2" style="color: var(--color-text-secondary);">
+                      <i class="bi bi-arrow-clockwise spinning"></i> Completando...
+                    </span>
+                  </td>
+                  <td>
+                    <span v-if="bag.pet">
+                      <i class="bi bi-heart-fill me-1" style="color: var(--color-primary);"></i>{{ bag.pet.name }}
+                    </span>
+                    <span v-else style="color: var(--color-text-muted);">—</span>
+                  </td>
+                  <td>
+                    <span class="badge" style="background-color: var(--color-primary); color: white;">{{ bag.quantity }}</span>
+                  </td>
+                  <td>
+                    <div class="d-flex flex-wrap gap-1">
+                      <span
+                        v-for="bi in bag.ingredients" :key="bi.ingredient?._id"
+                        class="badge"
+                        style="background-color: var(--color-muted); color: var(--color-text-primary); border: 1px solid var(--color-border);"
+                      >
+                        {{ bi.ingredient?.name }} {{ bi.gramsPerBag }}g
+                      </span>
+                    </div>
+                  </td>
+                  <td>
+                    <div class="d-flex gap-2">
+                      <button type="button" class="btn btn-outline-secondary btn-sm" @click="editBag(bag)" aria-label="Editar">
+                        <i class="bi bi-pencil"></i>
+                      </button>
+                      <button
+                        type="button"
+                        class="btn btn-outline-success btn-sm"
+                        @click="completeBag(bag)"
+                        :disabled="completingBags.has(bag._id)"
+                        aria-label="Completar"
+                      >
+                        <span v-if="completingBags.has(bag._id)" class="spinner-border spinner-border-sm" role="status"></span>
+                        <i v-else class="bi bi-check-lg"></i>
+                      </button>
+                      <button type="button" class="btn btn-outline-danger btn-sm" @click="deleteBag(bag)" aria-label="Eliminar">
+                        <i class="bi bi-trash"></i>
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </template>
   </div>
 </template>
 
@@ -515,35 +534,32 @@ onMounted(loadData);
 }
 
 .table-secondary {
-  background-color: #f8f9fa !important;
+  background-color: var(--color-muted) !important;
 }
 
-/* Cards mobile */
 .bag-card .card {
-  border: 1px solid #dee2e6;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.08);
-  transition: box-shadow 0.2s ease;
+  transition: box-shadow var(--transition-base);
 }
 
-.bag-card .card-header {
-  background-color: #f8f9fa;
+.bag-card .card:hover {
+  box-shadow: var(--shadow-md);
 }
 
 .bag-card.completing .card {
   opacity: 0.7;
 }
 
-/* badges de ingredientes */
-.badge.bg-light {
-  border-color: #dee2e6 !important;
-  font-size: 0.75rem;
+@media (prefers-reduced-motion: reduce) {
+  .bag-card .card {
+    transition: none;
+  }
 }
 
 @media (max-width: 575.98px) {
   .bag-card .card-body,
   .bag-card .card-header {
-    padding-left: 0.75rem;
-    padding-right: 0.75rem;
+    padding-left: var(--spacing-3);
+    padding-right: var(--spacing-3);
   }
 }
 </style>

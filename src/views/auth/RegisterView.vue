@@ -9,6 +9,8 @@ const auth = useAuthStore();
 const email = ref('');
 const password = ref('');
 const confirmPassword = ref('');
+const showPassword = ref(false);
+const showConfirmPassword = ref(false);
 const error = ref('');
 
 const onSubmit = async () => {
@@ -67,27 +69,47 @@ const onSubmit = async () => {
             </div>
             <div class="mb-3">
               <label class="form-label">Contraseña</label>
-              <input
-                v-model="password"
-                type="password"
-                class="form-control"
-                autocomplete="new-password"
-                required
-                minlength="6"
-                placeholder="Mínimo 6 caracteres"
-              />
+              <div class="input-group">
+                <input
+                  v-model="password"
+                  :type="showPassword ? 'text' : 'password'"
+                  class="form-control"
+                  autocomplete="new-password"
+                  required
+                  minlength="6"
+                  placeholder="Mínimo 6 caracteres"
+                />
+                <button
+                  type="button"
+                  class="btn btn-outline-secondary"
+                  @click="showPassword = !showPassword"
+                  aria-label="Mostrar contraseña"
+                >
+                  <i :class="showPassword ? 'bi bi-eye-slash' : 'bi bi-eye'"></i>
+                </button>
+              </div>
             </div>
             <div class="mb-4">
               <label class="form-label">Confirmar Contraseña</label>
-              <input
-                v-model="confirmPassword"
-                type="password"
-                class="form-control"
-                autocomplete="new-password"
-                required
-                minlength="6"
-                placeholder="Repite tu contraseña"
-              />
+              <div class="input-group">
+                <input
+                  v-model="confirmPassword"
+                  :type="showConfirmPassword ? 'text' : 'password'"
+                  class="form-control"
+                  autocomplete="new-password"
+                  required
+                  minlength="6"
+                  placeholder="Repite tu contraseña"
+                />
+                <button
+                  type="button"
+                  class="btn btn-outline-secondary"
+                  @click="showConfirmPassword = !showConfirmPassword"
+                  aria-label="Mostrar contraseña"
+                >
+                  <i :class="showConfirmPassword ? 'bi bi-eye-slash' : 'bi bi-eye'"></i>
+                </button>
+              </div>
             </div>
 
             <button type="submit" class="btn btn-primary w-100 mb-3" :disabled="auth.loading">

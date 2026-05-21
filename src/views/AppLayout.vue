@@ -157,7 +157,8 @@ const isActive = (path) => {
 }
 
 .nav-link.active {
-  color: var(--color-primary) !important;
+  color: white !important;
+  border-bottom: 2px solid white;
 }
 
 @media (max-width: 767.98px) {

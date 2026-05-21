@@ -1,13 +1,15 @@
 <script setup>
 import { ref } from 'vue';
-import { useRouter, RouterLink } from 'vue-router';
+import { useRouter, useRoute, RouterLink } from 'vue-router';
 import { useAuthStore } from '../../stores/auth.js';
 
 const router = useRouter();
+const route = useRoute();
 const auth = useAuthStore();
 
 const email = ref('');
 const password = ref('');
+const showPassword = ref(false);
 const error = ref('');
 
 const onSubmit = async () => {
@@ -18,7 +20,8 @@ const onSubmit = async () => {
   }
   try {
     await auth.login({ email: email.value, password: password.value });
-    router.push({ name: 'ingredients' });
+    const redirectPath = route.query.redirect || '/app/dashboard';
+    router.push(redirectPath);
   } catch (e) {
     error.value = e.message || 'No se pudo iniciar sesión';
   }
@@ -62,15 +65,25 @@ const onSubmit = async () => {
             </div>
             <div class="mb-4">
               <label class="form-label">Contraseña</label>
-              <input
-                v-model="password"
-                type="password"
-                class="form-control"
-                autocomplete="current-password"
-                required
-                minlength="6"
-                placeholder="••••••••"
-              />
+              <div class="input-group">
+                <input
+                  v-model="password"
+                  :type="showPassword ? 'text' : 'password'"
+                  class="form-control"
+                  autocomplete="current-password"
+                  required
+                  minlength="6"
+                  placeholder="••••••••"
+                />
+                <button
+                  type="button"
+                  class="btn btn-outline-secondary"
+                  @click="showPassword = !showPassword"
+                  aria-label="Mostrar contraseña"
+                >
+                  <i :class="showPassword ? 'bi bi-eye-slash' : 'bi bi-eye'"></i>
+                </button>
+              </div>
             </div>
 
             <button type="submit" class="btn btn-primary w-100 mb-3" :disabled="auth.loading">

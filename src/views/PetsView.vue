@@ -1,6 +1,10 @@
 <script setup>
 import { onMounted, ref, computed } from 'vue';
 import api from '../api/client.js';
+import { calculateAge, calculateRealAge } from '../utils/age.js';
+import { useToastStore } from '../stores/toast.js';
+
+const toast = useToastStore();
 
 const pets = ref([]);
 const ingredients = ref([]);
@@ -23,55 +27,10 @@ const form = ref({
   feedingTimesText: '',
 });
 
-// Calcular edad basada en fecha de nacimiento
-const calculateAge = (birthDate) => {
-  if (!birthDate) return 0;
-  
-  const today = new Date();
-  const birth = new Date(birthDate);
-  
-  // Calcular años, meses y días transcurridos
-  let years = today.getFullYear() - birth.getFullYear();
-  let months = today.getMonth() - birth.getMonth();
-  let days = today.getDate() - birth.getDate();
-  
-  // Ajustar si no ha pasado el día del cumpleaños este mes
-  if (days < 0) {
-    months--;
-    // Obtener días del mes anterior
-    const lastMonth = new Date(today.getFullYear(), today.getMonth(), 0);
-    days += lastMonth.getDate();
-  }
-  
-  // Ajustar si no ha pasado el mes del cumpleaños este año
-  if (months < 0) {
-    years--;
-    months += 12;
-  }
-  
-  // Convertir a años decimales (meses / 12 + días / 365)
-  const ageInYears = years + (months / 12) + (days / 365);
-  
-  return Math.max(0, Math.round(ageInYears * 10) / 10); // Redondear a 1 decimal
-};
-
-// Calcular edad humana equivalente (fórmula aproximada)
-// Calcular edad real del perro a partir de la edad humana
-// Fórmula actualizada: 1 año = 15 humanos, 2 años = 24, luego +4 por año adicional
-const calculateRealAge = (humanAge) => {
-  if (!humanAge || humanAge <= 0) return 0;
-  
-  if (humanAge <= 15) return humanAge / 15;
-  if (humanAge <= 24) return 2;
-  return 2 + (humanAge - 24) / 4;
-};
-
-// Edad calculada reactivamente
 const calculatedAge = computed(() => {
   return form.value.birthDate ? calculateAge(form.value.birthDate) : 0;
 });
 
-// Función para obtener la edad de una mascota (para mostrar en lista)
 const getPetAge = (pet) => {
   if (pet.birthDate) {
     return calculateAge(pet.birthDate);
@@ -106,7 +65,7 @@ const loadIngredients = async () => {
   try {
     ingredients.value = await api.get('/ingredients');
   } catch (e) {
-    console.error('No se pudieron cargar los ingredientes:', e);
+    error.value = e.message || 'No se pudieron cargar los ingredientes';
   }
 };
 
@@ -128,11 +87,11 @@ const updateInventory = async (pet) => {
       totalInventory: Number(tempInventory.value)
     });
     pets.value = pets.value.map((p) => (p._id === updated._id ? updated : p));
-    success.value = `Inventario de ${pet.name} actualizado a ${tempInventory.value} bolsas`;
+    toast.success(`Inventario de ${pet.name} actualizado a ${tempInventory.value} bolsas`);
     editingInventory.value = null;
     error.value = '';
   } catch (e) {
-    error.value = e.message || 'No se pudo actualizar el inventario';
+    toast.error(e.message || 'No se pudo actualizar el inventario');
   }
 };
 
@@ -167,15 +126,15 @@ const onSubmit = async () => {
     if (form.value.id) {
       const updated = await api.put(`/pets/${form.value.id}`, payload);
       pets.value = pets.value.map((p) => (p._id === updated._id ? updated : p));
-      success.value = 'Mascota actualizada correctamente';
+      toast.success('Mascota actualizada correctamente');
     } else {
       const created = await api.post('/pets', payload);
       pets.value.unshift(created);
-      success.value = 'Mascota creada correctamente';
+      toast.success('Mascota creada correctamente');
     }
     resetForm();
   } catch (e) {
-    error.value = e.message || 'No se pudo guardar la mascota';
+    toast.error(e.message || 'No se pudo guardar la mascota');
   } finally {
     saving.value = false;
   }
@@ -214,19 +173,10 @@ const registerFeedingDay = async (pet) => {
   feedingLoading.value = true;
   try {
     const res = await api.post(`/pets/${pet._id}/feed-day`, {});
-    success.value = `✅ Se registró un día de comida para ${pet.name}. Inventario restante: ${res.remainingInventory} bolsas. El rebajo automático no se ejecutará hasta mañana.`;
-
-    // Debug: mostrar información de la actualización
-    console.log('🍽️ Registro de comida completado:', {
-      pet: pet.name,
-      remainingInventory: res.remainingInventory,
-      lastUpdate: res.lastInventoryUpdate,
-      timezone: res.timezone
-    });
-
+    toast.success(`Día de comida registrado para ${pet.name}. Inventario: ${res.remainingInventory} bolsas`);
     await loadPets();
   } catch (e) {
-    error.value = e.message || 'No se pudo registrar el día de comida';
+    toast.error(e.message || 'No se pudo registrar el día de comida');
   } finally {
     feedingLoading.value = false;
   }
@@ -241,10 +191,10 @@ const deletePet = async (pet) => {
   try {
     await api.delete(`/pets/${pet._id}`);
     pets.value = pets.value.filter((p) => p._id !== pet._id);
-    success.value = 'Mascota eliminada';
+    toast.success('Mascota eliminada');
     error.value = '';
   } catch (e) {
-    error.value = e.message || 'No se pudo eliminar la mascota';
+    toast.error(e.message || 'No se pudo eliminar la mascota');
   }
 };
 
@@ -252,9 +202,7 @@ const startManageIngredients = async (pet) => {
   try {
     managingIngredients.value = pet._id;
     const existingIngredients = await api.get(`/pets/${pet._id}/ingredients`);
-    console.log('Ingredientes existentes para', pet.name, ':', existingIngredients);
 
-    // Crear array con todos los ingredientes y marcar cuáles están asociados
     petIngredients.value = ingredients.value.map(ing => {
       const existing = existingIngredients.find(ei => ei.ingredient._id === ing._id);
       return {
@@ -265,7 +213,6 @@ const startManageIngredients = async (pet) => {
         desiredPortions: existing ? existing.desiredPortions || 0 : 0
       };
     });
-    console.log('Ingredientes preparados para el modal:', petIngredients.value);
   } catch (e) {
     error.value = e.message || 'No se pudieron cargar los ingredientes de la mascota';
   }
@@ -281,24 +228,17 @@ const savePetIngredients = async () => {
         desiredPortions: pi.desiredPortions || 0
       }));
 
-    console.log('Guardando ingredientes para mascota:', managingIngredients.value);
-    console.log('Ingredientes seleccionados:', selectedIngredients);
-
-    const result = await api.put(`/pets/${managingIngredients.value}/ingredients`, {
+    await api.put(`/pets/${managingIngredients.value}/ingredients`, {
       ingredients: selectedIngredients
     });
 
-    console.log('Resultado del guardado:', result);
-
-    success.value = 'Ingredientes de la mascota actualizados correctamente';
+    toast.success('Ingredientes actualizados correctamente');
     managingIngredients.value = null;
     error.value = '';
 
-    // Recargar mascotas para mostrar los cambios actualizados
     await loadPets();
   } catch (e) {
-    console.error('Error guardando ingredientes:', e);
-    error.value = e.message || 'No se pudieron guardar los ingredientes';
+    toast.error(e.message || 'No se pudieron guardar los ingredientes');
   }
 };
 
@@ -396,10 +336,15 @@ onMounted(() => {
               </small>
             </div>
             <div class="col-12">
-              <button type="submit" class="btn btn-primary w-100" :disabled="saving">
-                <span v-if="saving" class="spinner-border spinner-border-sm me-2" />
-                {{ form.id ? 'Guardar Cambios' : 'Añadir Mascota' }}
-              </button>
+              <div class="d-flex gap-2">
+                <button type="submit" class="btn btn-primary flex-grow-1" :disabled="saving">
+                  <span v-if="saving" class="spinner-border spinner-border-sm me-2" />
+                  {{ form.id ? 'Guardar Cambios' : 'Añadir Mascota' }}
+                </button>
+                <button v-if="form.id" type="button" class="btn btn-outline-secondary" @click="resetForm">
+                  Cancelar
+                </button>
+              </div>
             </div>
           </div>
         </form>

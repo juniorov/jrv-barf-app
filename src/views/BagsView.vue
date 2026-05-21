@@ -3,11 +3,12 @@ import { onMounted, ref, computed } from 'vue';
 import api from '../api/client.js';
 import { useAuthStore } from '../stores/auth.js';
 import { useBagStore } from '../stores/bags.js';
+import { useToastStore } from '../stores/toast.js';
 
 const auth = useAuthStore();
 const bagStore = useBagStore();
+const toast = useToastStore();
 
-const ingredients = ref([]);
 const pets = ref([]);
 const bags = ref([]);
 const loading = ref(false);
@@ -37,9 +38,8 @@ const availableIngredients = computed(() => {
   if (!form.value.petId) return [];
 
   const selectedPet = pets.value.find(p => p._id === form.value.petId);
-  const ingredients = selectedPet?.ingredients || [];
-  console.log('Available ingredients for pet', selectedPet?.name, ':', ingredients);
-  return ingredients;
+  const petIngredients = selectedPet?.ingredients || [];
+  return petIngredients;
 });
 
 const resetForm = () => {
@@ -61,27 +61,22 @@ const updateSelectionsForPet = () => {
 
   const selectedPet = pets.value.find(p => p._id === form.value.petId);
   const petIngredients = selectedPet?.ingredients || [];
-  console.log('Updating selections for pet:', selectedPet?.name, 'ingredients:', petIngredients);
 
   form.value.selections = petIngredients.map((i) => ({
     ingredientId: i.ingredient._id,
     selected: false,
     gramsPerBag: i.gramsPerPortion || 100,
   }));
-
-  console.log('New selections:', form.value.selections);
 };
 
 const loadData = async () => {
   loading.value = true;
   error.value = '';
   try {
-    const [ing, bs, ps] = await Promise.all([
-      api.get('/ingredients'),
-      api.get('/bags'), // Obtener TODAS las bolsas
+    const [bs, ps] = await Promise.all([
+      api.get('/bags'),
       api.get('/pets'),
     ]);
-    ingredients.value = ing;
     pets.value = ps;
 
     bags.value = bs.filter((b) => !b.isCompleted);
@@ -141,15 +136,15 @@ const onSubmit = async () => {
       bags.value = bags.value.map((b) =>
         b._id === updated._id ? updated : b,
       );
-      success.value = 'Bolsa actualizada correctamente';
+      toast.success('Bolsa actualizada correctamente');
     } else {
       const created = await api.post('/bags', payload);
       bags.value.unshift(created);
-      success.value = 'Bolsa creada correctamente';
+      toast.success('Bolsa creada correctamente');
     }
     resetForm();
   } catch (e) {
-    error.value = e.message || 'No se pudo guardar la bolsa';
+    toast.error(e.message || 'No se pudo guardar la bolsa');
   } finally {
     saving.value = false;
   }
@@ -189,10 +184,10 @@ const deleteBag = async (bag) => {
   try {
     await api.delete(`/bags/${bag._id}`);
     bags.value = bags.value.filter((b) => b._id !== bag._id);
-    success.value = 'Bolsa eliminada';
+    toast.success('Bolsa eliminada');
     error.value = '';
   } catch (e) {
-    error.value = e.message || 'No se pudo eliminar la bolsa';
+    toast.error(e.message || 'No se pudo eliminar la bolsa');
   }
 };
 
@@ -222,16 +217,10 @@ const completeBag = async (bag) => {
 
     bagStore.markUpdated();
 
-    success.value = `✅ ${response.message || 'Bolsa completada correctamente y removida de la lista'}`;
-
-    // Limpiar mensaje después de 3 segundos
-    setTimeout(() => {
-      success.value = '';
-    }, 3000);
+    toast.success(response.message || 'Bolsa completada correctamente');
 
   } catch (e) {
-    error.value = e.message || 'No se pudo completar la bolsa';
-    console.error('Error completando bolsa:', e);
+    toast.error(e.message || 'No se pudo completar la bolsa');
   } finally {
     // Remover de la lista de procesamiento
     completingBags.value.delete(bag._id);

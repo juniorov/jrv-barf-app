@@ -1,9 +1,12 @@
 <script setup>
 import { ref, onMounted, onUnmounted, watch } from 'vue';
-import apiClient from '../api/client.js';
+import api from '../api/client.js';
 import { useBagStore } from '../stores/bags.js';
+import { useToastStore } from '../stores/toast.js';
+import { calculateAge, calculateRealAge } from '../utils/age.js';
 
 const bagStore = useBagStore();
+const toast = useToastStore();
 
 const loading = ref(true);
 const error = ref(null);
@@ -14,46 +17,6 @@ const forceUpdateLoading = ref({});
 const autoUpdateInterval = ref(null);
 const lastDashboardUpdate = ref(null);
 
-// Función para calcular edad en el frontend (igual que en PetsView)
-const calculateAge = (birthDate) => {
-  if (!birthDate) return 0;
-  
-  const today = new Date();
-  const birth = new Date(birthDate);
-  
-  // Calcular años, meses y días transcurridos
-  let years = today.getFullYear() - birth.getFullYear();
-  let months = today.getMonth() - birth.getMonth();
-  let days = today.getDate() - birth.getDate();
-  
-  // Ajustar si no ha pasado el día del cumpleaños este mes
-  if (days < 0) {
-    months--;
-    // Obtener días del mes anterior
-    const lastMonth = new Date(today.getFullYear(), today.getMonth(), 0);
-    days += lastMonth.getDate();
-  }
-  
-  // Ajustar si no ha pasado el mes del cumpleaños este año
-  if (months < 0) {
-    years--;
-    months += 12;
-  }
-  
-  // Convertir a años decimales (meses / 12 + días / 365)
-  const ageInYears = years + (months / 12) + (days / 365);
-  
-  return Math.max(0, Math.round(ageInYears * 10) / 10); // Redondear a 1 decimal
-};
-
-const calculateRealAge = (humanAge) => {
-  if (!humanAge || humanAge <= 0) return 0;
-  if (humanAge <= 15) return humanAge / 15;
-  if (humanAge <= 24) return 2;
-  return 2 + (humanAge - 24) / 4;
-};
-
-// Función para obtener la edad de una mascota correctamente formateada
 const getPetAge = (pet) => {
   if (pet.birthDate) {
     return calculateAge(pet.birthDate);
@@ -71,25 +34,13 @@ const formatDate = (dateString) => {
   });
 };
 
-const formatDateTime = (dateString) => {
-  if (!dateString) return 'N/A';
-  const date = new Date(dateString);
-  return date.toLocaleDateString('es-ES', {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit'
-  });
-};
-
 const getUpdateStatusBadge = (petInfo) => {
   if (!petInfo) return { class: 'bg-secondary', text: 'Sin info' };
 
   const minutes = petInfo.minutesSinceUpdate || 0;
   if (minutes < 30) return { class: 'bg-success', text: 'Actualizado' };
   if (minutes < 60) return { class: 'bg-info', text: 'Reciente' };
-  if (minutes < 1440) return { class: 'bg-warning text-dark', text: 'Hoy' }; // 24 horas
+  if (minutes < 1440) return { class: 'bg-warning text-dark', text: 'Hoy' };
   return { class: 'bg-danger', text: 'Desactualizado' };
 };
 
@@ -99,9 +50,9 @@ const loadDashboardData = async () => {
     error.value = null;
 
     const [petStatsResponse, summaryResponse, inventoryResponse] = await Promise.all([
-      apiClient.get('/dashboard/pet-statistics'),
-      apiClient.get('/dashboard/summary'),
-      apiClient.get('/pets/inventory-status')
+      api.get('/dashboard/pet-statistics'),
+      api.get('/dashboard/summary'),
+      api.get('/pets/inventory-status')
     ]);
 
     petStatistics.value = petStatsResponse;
@@ -111,7 +62,6 @@ const loadDashboardData = async () => {
 
   } catch (err) {
     error.value = err.message || 'Error al cargar los datos del dashboard';
-    console.error('❌ Error loading dashboard data:', err);
   } finally {
     loading.value = false;
   }
@@ -122,16 +72,12 @@ const forceInventoryUpdate = async (petId, petName) => {
     forceUpdateLoading.value[petId] = true;
     error.value = null;
 
-    const response = await apiClient.post(`/pets/${petId}/force-inventory-update`);
-
-    // Recargar los datos del dashboard
+    await api.post(`/pets/${petId}/force-inventory-update`);
     await loadDashboardData();
-
-    // Mostrar mensaje de éxito detallado
+    toast.success(`Inventario de ${petName} actualizado`);
 
   } catch (err) {
-    console.error('Error updating inventory:', err);
-    error.value = `Error al actualizar inventario de ${petName}: ${err.message}`;
+    toast.error(`Error al actualizar inventario de ${petName}: ${err.message}`);
   } finally {
     forceUpdateLoading.value[petId] = false;
   }
@@ -141,14 +87,13 @@ const getPetInventoryInfo = (petId) => {
   return inventoryStatus.value.find(status => status.petId === petId);
 };
 
-// Función para actualizar solo el status de inventario (más liviano)
 const updateInventoryStatus = async () => {
   try {
-    const inventoryResponse = await apiClient.get('/pets/inventory-status');
+    const inventoryResponse = await api.get('/pets/inventory-status');
     inventoryStatus.value = inventoryResponse.pets || [];
     lastDashboardUpdate.value = new Date();
   } catch (err) {
-    console.error('Error updating inventory status:', err);
+    // Silenciar errores en auto-update
   }
 };
 

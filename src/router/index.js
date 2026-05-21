@@ -14,6 +14,7 @@ const PetsView = () => import('../views/PetsView.vue');
 
 const router = createRouter({
   history: createWebHistory(),
+  scrollBehavior: () => ({ top: 0 }),
   routes: [
     {
       path: '/',
@@ -97,7 +98,7 @@ router.beforeEach(async (to, from, next) => {
   }
 
   if (to.meta.requiresAuth && !auth.isAuthenticated) {
-    return next({ name: 'login' });
+    return next({ name: 'login', query: { redirect: to.fullPath } });
   }
 
   if (to.meta.guestOnly && auth.isAuthenticated) {

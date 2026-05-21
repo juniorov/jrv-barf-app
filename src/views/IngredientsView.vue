@@ -1,6 +1,9 @@
 <script setup>
 import { onMounted, ref } from 'vue';
 import api from '../api/client.js';
+import { useToastStore } from '../stores/toast.js';
+
+const toast = useToastStore();
 
 const ingredients = ref([]);
 const loading = ref(false);
@@ -52,15 +55,15 @@ const onSubmit = async () => {
       ingredients.value = ingredients.value.map((i) =>
         i._id === updated._id ? updated : i,
       );
-      success.value = 'Ingrediente actualizado correctamente';
+      toast.success('Ingrediente actualizado correctamente');
     } else {
       const created = await api.post('/ingredients', payload);
       ingredients.value.unshift(created);
-      success.value = 'Ingrediente creado correctamente';
+      toast.success('Ingrediente creado correctamente');
     }
     resetForm();
   } catch (e) {
-    error.value = e.message || 'No se pudo guardar el ingrediente';
+    toast.error(e.message || 'No se pudo guardar el ingrediente');
   } finally {
     saving.value = false;
   }
@@ -85,10 +88,10 @@ const deleteIngredient = async (ingredient) => {
   try {
     await api.delete(`/ingredients/${ingredient._id}`);
     ingredients.value = ingredients.value.filter((i) => i._id !== ingredient._id);
-    success.value = 'Ingrediente eliminado';
+    toast.success('Ingrediente eliminado');
     error.value = '';
   } catch (e) {
-    error.value = e.message || 'No se pudo eliminar el ingrediente';
+    toast.error(e.message || 'No se pudo eliminar el ingrediente');
   }
 };
 
@@ -141,10 +144,15 @@ onMounted(loadIngredients);
               />
             </div>
             <div class="col-12 col-md-2">
-              <button type="submit" class="btn btn-primary w-100" :disabled="saving">
-                <span v-if="saving" class="spinner-border spinner-border-sm me-2" />
-                {{ form.id ? 'Guardar' : 'Añadir' }}
-              </button>
+              <div class="d-flex gap-2">
+                <button type="submit" class="btn btn-primary flex-grow-1" :disabled="saving">
+                  <span v-if="saving" class="spinner-border spinner-border-sm me-2" />
+                  {{ form.id ? 'Guardar' : 'Añadir' }}
+                </button>
+                <button v-if="form.id" type="button" class="btn btn-outline-secondary" @click="resetForm">
+                  Cancelar
+                </button>
+              </div>
             </div>
           </div>
         </form>

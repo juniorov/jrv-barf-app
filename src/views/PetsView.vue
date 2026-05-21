@@ -314,133 +314,298 @@ onMounted(() => {
 </script>
 
 <template>
-  <div>
-    <div class="d-flex justify-content-between align-items-center mb-3">
-      <h2 class="h4 mb-0">Mascotas</h2>
+  <div class="fade-in">
+    <!-- Header -->
+    <div class="mb-4">
+      <h2 class="h4 mb-1" style="color: var(--color-text-primary);">Mascotas</h2>
+      <p class="mb-0" style="color: var(--color-text-secondary); font-size: var(--font-size-sm);">
+        Gestiona tus mascotas y su alimentación BARF
+      </p>
     </div>
 
-    <p class="text-muted small mb-3">
-      Gestiona tus mascotas (nombre y edad) para poder asociar las bolsas o platos de comida a cada
-      una de ellas.
-    </p>
+    <!-- Alerts -->
+    <div v-if="error" class="alert alert-danger mb-3">{{ error }}</div>
+    <div v-if="success" class="alert alert-success mb-3">{{ success }}</div>
 
-    <div v-if="error" class="alert alert-danger py-2">{{ error }}</div>
-    <div v-if="success" class="alert alert-success py-2">{{ success }}</div>
-
+    <!-- Form Card -->
     <div class="card mb-4">
-      <div class="card-body">
-        <h3 class="h6 mb-3">
+      <div class="card-header">
+        <h3 class="h6 mb-0" style="color: var(--color-text-primary);">
+          <i class="bi bi-plus-circle me-2" style="color: var(--color-primary);"></i>
           {{ form.id ? 'Editar mascota' : 'Nueva mascota' }}
         </h3>
-        <form @submit.prevent="onSubmit" class="row g-3">
-          <div class="col-md-6">
-            <label class="form-label">Nombre</label>
-            <input
-              v-model="form.name"
-              type="text"
-              class="form-control"
-              required
-              placeholder="Ej: Rocky"
-            />
-          </div>
-          <div class="col-md-3">
-            <label class="form-label">Fecha de Nacimiento</label>
-            <input
-              v-model="form.birthDate"
-              type="date"
-              class="form-control"
-              required
-            />
-            <small v-if="form.birthDate" class="text-muted">
-              Edad: {{ calculatedAge.toFixed(1) }} años ({{ calculateRealAge(calculatedAge).toFixed(1) }} real)
-            </small>
-          </div>
-          <div class="col-md-3">
-            <label class="form-label">Comidas al día (bolsas)</label>
-            <input
-              v-model.number="form.mealsPerDay"
-              type="number"
-              min="0"
-              step="1"
-              class="form-control"
-              required
-            />
-          </div>
-          <div class="col-md-3">
-            <label class="form-label">Máx. ingredientes por bolsa</label>
-            <input
-              v-model.number="form.maxIngredientsPerBag"
-              type="number"
-              min="1"
-              max="20"
-              step="1"
-              class="form-control"
-              required
-            />
-          </div>
-          <div class="col-md-6">
-            <label class="form-label">Horas de comida (HH:MM, separadas por coma)</label>
-            <input
-              v-model="form.feedingTimesText"
-              type="text"
-              class="form-control"
-              placeholder="Ej: 08:00, 14:00, 20:00"
-            />
-            <small class="text-muted">
-              Se usan para calcular automáticamente cuántas bolsas deberían haberse consumido desde
-              la última actualización.
-            </small>
-          </div>
-          <div class="col-md-3 d-flex align-items-end">
-            <button type="submit" class="btn btn-primary w-100" :disabled="saving">
-              <span v-if="saving" class="spinner-border spinner-border-sm me-1" />
-              {{ form.id ? 'Guardar' : 'Añadir' }}
-            </button>
+      </div>
+      <div class="card-body">
+        <form @submit.prevent="onSubmit">
+          <div class="row g-3">
+            <div class="col-12 col-md-6">
+              <label class="form-label">Nombre *</label>
+              <input
+                v-model="form.name"
+                type="text"
+                class="form-control"
+                required
+                placeholder="Ej: Rocky"
+              />
+            </div>
+            <div class="col-12 col-md-6">
+              <label class="form-label">Fecha de Nacimiento *</label>
+              <input
+                v-model="form.birthDate"
+                type="date"
+                class="form-control"
+                required
+              />
+              <small v-if="form.birthDate" style="color: var(--color-text-secondary);">
+                Edad: {{ calculatedAge.toFixed(1) }} años
+              </small>
+            </div>
+            <div class="col-6 col-md-3">
+              <label class="form-label">Comidas al día</label>
+              <input
+                v-model.number="form.mealsPerDay"
+                type="number"
+                min="0"
+                step="1"
+                class="form-control"
+                required
+              />
+            </div>
+            <div class="col-6 col-md-3">
+              <label class="form-label">Máx. ingredientes</label>
+              <input
+                v-model.number="form.maxIngredientsPerBag"
+                type="number"
+                min="1"
+                max="20"
+                step="1"
+                class="form-control"
+                required
+              />
+            </div>
+            <div class="col-12">
+              <label class="form-label">Horarios de comida</label>
+              <input
+                v-model="form.feedingTimesText"
+                type="text"
+                class="form-control"
+                placeholder="Ej: 08:00, 14:00, 20:00"
+              />
+              <small style="color: var(--color-text-secondary);">
+                Separados por coma (HH:MM)
+              </small>
+            </div>
+            <div class="col-12">
+              <button type="submit" class="btn btn-primary w-100" :disabled="saving">
+                <span v-if="saving" class="spinner-border spinner-border-sm me-2" />
+                {{ form.id ? 'Guardar Cambios' : 'Añadir Mascota' }}
+              </button>
+            </div>
           </div>
         </form>
       </div>
     </div>
 
+    <!-- Pets List -->
     <div class="card">
-      <div class="card-body">
-        <div class="d-flex justify-content-between align-items-center mb-2">
-          <h3 class="h6 mb-0">Listado de mascotas</h3>
-          <span v-if="loading" class="small text-muted">Cargando...</span>
+      <div class="card-header d-flex justify-content-between align-items-center">
+        <h3 class="h6 mb-0">Listado de Mascotas</h3>
+        <span v-if="loading" class="small" style="color: var(--color-text-secondary);">
+          <span class="spinner-border spinner-border-sm me-1"></span>Cargando...
+        </span>
+      </div>
+      <div class="card-body p-0">
+        <div v-if="!pets.length && !loading" class="text-center py-5">
+          <i class="bi bi-inbox mb-3" style="font-size: 3rem; color: var(--color-text-muted);"></i>
+          <p class="mb-0" style="color: var(--color-text-secondary);">
+            No hay mascotas aún. Crea la primera con el formulario.
+          </p>
         </div>
-        <div v-if="!pets.length && !loading" class="text-muted small">
-          No hay mascotas aún. Crea la primera con el formulario superior.
+        
+        <!-- Mobile Cards View -->
+        <div v-else class="d-md-none">
+          <div v-for="pet in pets" :key="pet._id" class="pet-card">
+            <div class="card m-3">
+              <!-- Pet Header -->
+              <div class="card-header" style="background-color: var(--color-muted);">
+                <div class="d-flex justify-content-between align-items-center">
+                  <h5 class="mb-0 d-flex align-items-center">
+                    <i class="bi bi-heart-fill me-2" style="color: var(--color-primary);"></i>
+                    {{ pet.name }}
+                  </h5>
+                  <span class="badge" style="background-color: var(--color-primary); color: white;">
+                    {{ getPetAge(pet).toFixed(1) }} años
+                  </span>
+                </div>
+              </div>
+              
+              <!-- Pet Info -->
+              <div class="card-body">
+                <!-- Stats Grid -->
+                <div class="row g-3 mb-3">
+                  <div class="col-6">
+                    <div class="text-center p-3 rounded" style="background-color: var(--color-muted);">
+                      <div class="fw-bold fs-4" style="color: var(--color-text-primary);">{{ pet.mealsPerDay ?? 0 }}</div>
+                      <small style="color: var(--color-text-secondary);">Comidas/día</small>
+                    </div>
+                  </div>
+                  <div class="col-6">
+                    <div class="text-center p-3 rounded" style="background-color: var(--color-muted);">
+                      <div class="fw-bold fs-4" style="color: var(--color-text-primary);">{{ pet.maxIngredientsPerBag ?? 5 }}</div>
+                      <small style="color: var(--color-text-secondary);">Máx. ingredientes</small>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Inventory -->
+                <div class="mb-3 p-3 rounded" style="background-color: var(--color-success-bg);">
+                  <div class="d-flex justify-content-between align-items-center mb-2">
+                    <small style="color: var(--color-text-secondary);">Inventario</small>
+                    <span class="fw-bold fs-5" style="color: var(--color-success);">
+                      {{ pet.totalInventory ?? 0 }} bolsas
+                    </span>
+                  </div>
+                  <div v-if="getDaysOfFood(pet) !== null" class="d-flex justify-content-between align-items-center">
+                    <small style="color: var(--color-text-secondary);">Días restantes</small>
+                    <span class="fw-bold" style="color: var(--color-success);">
+                      {{ getDaysOfFood(pet).toFixed(1) }} días
+                    </span>
+                  </div>
+                  <div v-if="editingInventory === pet._id" class="mt-3 pt-3" style="border-top: 1px solid var(--color-border);">
+                    <div class="d-flex gap-2">
+                      <input
+                        type="number"
+                        class="form-control"
+                        v-model.number="tempInventory"
+                        min="0"
+                        @keyup.enter="updateInventory(pet)"
+                        @keyup.escape="cancelEditInventory"
+                        placeholder="Cantidad"
+                      >
+                      <button
+                        type="button"
+                        class="btn btn-success"
+                        @click="updateInventory(pet)"
+                        aria-label="Guardar"
+                      >
+                        <i class="bi bi-check"></i>
+                      </button>
+                      <button
+                        type="button"
+                        class="btn btn-outline-secondary"
+                        @click="cancelEditInventory"
+                        aria-label="Cancelar"
+                      >
+                        <i class="bi bi-x"></i>
+                      </button>
+                    </div>
+                  </div>
+                  <div v-else class="mt-2">
+                    <button
+                      type="button"
+                      class="btn btn-outline-primary btn-sm w-100"
+                      @click="startEditInventory(pet)"
+                    >
+                      <i class="bi bi-pencil me-1"></i>Editar Inventario
+                    </button>
+                  </div>
+                </div>
+
+                <!-- Ingredients -->
+                <div class="mb-3">
+                  <div class="d-flex justify-content-between align-items-center mb-2">
+                    <small style="color: var(--color-text-secondary);">
+                      Ingredientes ({{ pet.ingredients?.length || 0 }})
+                    </small>
+                    <button
+                      type="button"
+                      class="btn btn-outline-info btn-sm"
+                      @click="startManageIngredients(pet)"
+                    >
+                      <i class="bi bi-gear me-1"></i>Gestionar
+                    </button>
+                  </div>
+                  <div v-if="pet.ingredients?.length" class="d-flex flex-wrap gap-2">
+                    <span
+                      v-for="ing in pet.ingredients"
+                      :key="ing.ingredient?._id"
+                      class="badge"
+                      style="background-color: var(--color-muted); color: var(--color-text-primary); border: 1px solid var(--color-border);"
+                    >
+                      {{ ing.ingredient?.name || 'N/A' }}
+                    </span>
+                  </div>
+                  <div v-else style="color: var(--color-text-muted); font-size: var(--font-size-sm);">
+                    Sin ingredientes asignados
+                  </div>
+                </div>
+
+                <!-- Actions -->
+                <div class="d-grid gap-2">
+                  <div class="row g-2">
+                    <div class="col-6">
+                      <button
+                        type="button"
+                        class="btn btn-outline-secondary w-100"
+                        @click="editPet(pet)"
+                      >
+                        <i class="bi bi-pencil me-1"></i>Editar
+                      </button>
+                    </div>
+                    <div class="col-6">
+                      <button
+                        type="button"
+                        class="btn btn-outline-primary w-100"
+                        :disabled="feedingLoading"
+                        @click="registerFeedingDay(pet)"
+                      >
+                        <i class="bi bi-plus-circle me-1"></i>
+                        <span v-if="feedingLoading">Registrando...</span>
+                        <span v-else>Día Comida</span>
+                      </button>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    class="btn btn-outline-danger"
+                    @click="deletePet(pet)"
+                  >
+                    <i class="bi bi-trash me-1"></i>Eliminar
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
-        <div v-else>
-          <!-- Vista de tabla para desktop -->
-          <div class="table-responsive d-none d-md-block">
-            <table class="table table-sm align-middle">
+
+        <!-- Desktop Table View -->
+        <div class="d-none d-md-block">
+          <div class="table-responsive">
+            <table class="table table-sm align-middle mb-0">
               <thead>
                 <tr>
                   <th>Nombre</th>
                   <th>Edad</th>
                   <th>Comidas/día</th>
                   <th>Máx. ingredientes</th>
-                  <th>Inventario Total</th>
-                  <th>Días de comida</th>
+                  <th>Inventario</th>
+                  <th>Días restantes</th>
                   <th>Ingredientes</th>
                   <th>Acciones</th>
                 </tr>
               </thead>
               <tbody>
                 <tr v-for="pet in pets" :key="pet._id">
-                  <td>{{ pet.name }}</td>
-                  <td>
-                    <div>{{ getPetAge(pet).toFixed(1) }} años</div>
-                    <small class="text-muted">({{ calculateRealAge(getPetAge(pet)).toFixed(1) }} real)</small>
-                  </td>
+                  <td class="fw-semibold">{{ pet.name }}</td>
+                  <td>{{ getPetAge(pet).toFixed(1) }} años</td>
                   <td>{{ pet.mealsPerDay ?? 0 }}</td>
                   <td>{{ pet.maxIngredientsPerBag ?? 5 }}</td>
                   <td>
-                    <div v-if="editingInventory === pet._id" class="d-flex align-items-center gap-1">
+                    <div v-if="editingInventory === pet._id" class="d-flex align-items-center gap-2">
                       <input
                         type="number"
                         class="form-control form-control-sm"
-                        style="width: 80px;"
+                        style="width: 100px;"
                         v-model.number="tempInventory"
                         min="0"
                         @keyup.enter="updateInventory(pet)"
@@ -448,9 +613,9 @@ onMounted(() => {
                       >
                       <button
                         type="button"
-                        class="btn btn-outline-success btn-sm"
+                        class="btn btn-success btn-sm"
                         @click="updateInventory(pet)"
-                        title="Guardar"
+                        aria-label="Guardar"
                       >
                         <i class="bi bi-check"></i>
                       </button>
@@ -458,39 +623,34 @@ onMounted(() => {
                         type="button"
                         class="btn btn-outline-secondary btn-sm"
                         @click="cancelEditInventory"
-                        title="Cancelar"
+                        aria-label="Cancelar"
                       >
                         <i class="bi bi-x"></i>
                       </button>
                     </div>
                     <div v-else class="d-flex align-items-center gap-2">
-                      <span>{{ pet.totalInventory ?? 0 }} bolsas</span>
+                      <span class="fw-semibold">{{ pet.totalInventory ?? 0 }}</span>
                       <button
                         type="button"
                         class="btn btn-outline-primary btn-sm"
                         @click="startEditInventory(pet)"
-                        title="Editar inventario"
+                        aria-label="Editar inventario"
                       >
                         <i class="bi bi-pencil"></i>
                       </button>
                     </div>
                   </td>
                   <td>
-                    <span v-if="getDaysOfFood(pet) !== null">
+                    <span v-if="getDaysOfFood(pet) !== null" class="fw-semibold" style="color: var(--color-success);">
                       {{ getDaysOfFood(pet).toFixed(1) }} días
                     </span>
-                    <span v-else class="text-muted small">Sin comidas/día</span>
+                    <span v-else style="color: var(--color-text-muted);">—</span>
                   </td>
                   <td>
-                    <div class="d-flex align-items-center gap-2">
-                      <div>
-                        <small class="text-muted">
-                          {{ pet.ingredients?.length || 0 }} ingrediente{{ (pet.ingredients?.length || 0) !== 1 ? 's' : '' }}
-                        </small>
-                        <div v-if="pet.ingredients?.length" class="small text-success">
-                          {{ pet.ingredients.map(i => i.ingredient?.name || 'N/A').join(', ') }}
-                        </div>
-                      </div>
+                    <div class="d-flex flex-wrap gap-1 align-items-center">
+                      <span style="color: var(--color-text-secondary); font-size: var(--font-size-sm);">
+                        {{ pet.ingredients?.length || 0 }}
+                      </span>
                       <button
                         type="button"
                         class="btn btn-outline-info btn-sm"
@@ -501,225 +661,96 @@ onMounted(() => {
                     </div>
                   </td>
                   <td>
-                    <button
-                      type="button"
-                      class="btn btn-outline-secondary btn-sm me-2"
-                      @click="editPet(pet)"
-                    >
-                      Editar
-                    </button>
-                    <button
-                      type="button"
-                      class="btn btn-outline-primary btn-sm me-2"
-                      :disabled="feedingLoading"
-                      @click="registerFeedingDay(pet)"
-                    >
-                      Registrar día de comida
-                    </button>
-                    <button
-                      type="button"
-                      class="btn btn-outline-danger btn-sm"
-                      @click="deletePet(pet)"
-                    >
-                      Eliminar
-                    </button>
+                    <div class="d-flex gap-2">
+                      <button
+                        type="button"
+                        class="btn btn-outline-secondary btn-sm"
+                        @click="editPet(pet)"
+                      >
+                        Editar
+                      </button>
+                      <button
+                        type="button"
+                        class="btn btn-outline-primary btn-sm"
+                        :disabled="feedingLoading"
+                        @click="registerFeedingDay(pet)"
+                      >
+                        Registrar día
+                      </button>
+                      <button
+                        type="button"
+                        class="btn btn-outline-danger btn-sm"
+                        @click="deletePet(pet)"
+                      >
+                        Eliminar
+                      </button>
+                    </div>
                   </td>
                 </tr>
               </tbody>
             </table>
           </div>
-
-          <!-- Vista de cards para móvil -->
-          <div class="d-md-none">
-            <div v-for="pet in pets" :key="pet._id" class="pet-card mb-3">
-              <div class="card">
-                <div class="card-header">
-                  <div class="d-flex justify-content-between align-items-center">
-                    <h5 class="mb-0">
-                      <i class="bi bi-heart-fill text-danger me-2"></i>
-                      {{ pet.name }}
-                    </h5>
-                    <div>
-                      <span class="badge bg-primary">{{ getPetAge(pet).toFixed(1) }} años</span>
-                      <small class="text-muted ms-1">({{ calculateRealAge(getPetAge(pet)).toFixed(1) }} real)</small>
-                    </div>
-                  </div>
-                </div>
-                <div class="card-body">
-                  <!-- Información básica -->
-                  <div class="row mb-3">
-                    <div class="col-6">
-                      <small class="text-muted">Comidas diarias</small>
-                      <div class="fw-bold">{{ pet.mealsPerDay ?? 0 }}</div>
-                    </div>
-                    <div class="col-6">
-                      <small class="text-muted">Máx. ingredientes</small>
-                      <div class="fw-bold">{{ pet.maxIngredientsPerBag ?? 5 }}</div>
-                    </div>
-                  </div>
-
-                  <!-- Inventario -->
-                  <div class="mb-3">
-                    <small class="text-muted">Inventario</small>
-                    <div v-if="editingInventory === pet._id" class="d-flex align-items-center gap-2 mt-1">
-                      <input
-                        type="number"
-                        class="form-control form-control-sm"
-                        v-model.number="tempInventory"
-                        min="0"
-                        @keyup.enter="updateInventory(pet)"
-                        @keyup.escape="cancelEditInventory"
-                        placeholder="Cantidad de bolsas"
-                      >
-                      <button
-                        type="button"
-                        class="btn btn-success btn-sm"
-                        @click="updateInventory(pet)"
-                        title="Guardar"
-                      >
-                        <i class="bi bi-check"></i>
-                      </button>
-                      <button
-                        type="button"
-                        class="btn btn-secondary btn-sm"
-                        @click="cancelEditInventory"
-                        title="Cancelar"
-                      >
-                        <i class="bi bi-x"></i>
-                      </button>
-                    </div>
-                    <div v-else class="d-flex justify-content-between align-items-center">
-                      <div>
-                        <div class="fw-bold">{{ pet.totalInventory ?? 0 }} bolsas</div>
-                        <small v-if="getDaysOfFood(pet) !== null" class="text-success">
-                          <i class="bi bi-calendar-check me-1"></i>{{ getDaysOfFood(pet).toFixed(1) }} días
-                        </small>
-                        <small v-else class="text-muted">Sin estimación de días</small>
-                      </div>
-                      <button
-                        type="button"
-                        class="btn btn-outline-primary btn-sm"
-                        @click="startEditInventory(pet)"
-                      >
-                        <i class="bi bi-pencil me-1"></i>Editar
-                      </button>
-                    </div>
-                  </div>
-
-                  <!-- Ingredientes -->
-                  <div class="mb-3">
-                    <div class="d-flex justify-content-between align-items-center mb-2">
-                      <small class="text-muted">
-                        Ingredientes ({{ pet.ingredients?.length || 0 }})
-                      </small>
-                      <button
-                        type="button"
-                        class="btn btn-outline-info btn-sm"
-                        @click="startManageIngredients(pet)"
-                      >
-                        <i class="bi bi-gear me-1"></i>Gestionar
-                      </button>
-                    </div>
-                    <div v-if="pet.ingredients?.length" class="ingredient-tags">
-                      <span
-                        v-for="ing in pet.ingredients"
-                        :key="ing.ingredient?._id"
-                        class="badge bg-light text-dark me-1 mb-1"
-                      >
-                        {{ ing.ingredient?.name || 'N/A' }}
-                      </span>
-                    </div>
-                    <div v-else class="text-muted small">Sin ingredientes asignados</div>
-                  </div>
-
-                  <!-- Acciones -->
-                  <div class="d-grid gap-2">
-                    <div class="row">
-                      <div class="col-6">
-                        <button
-                          type="button"
-                          class="btn btn-outline-secondary btn-sm w-100"
-                          @click="editPet(pet)"
-                        >
-                          <i class="bi bi-pencil me-1"></i>Editar
-                        </button>
-                      </div>
-                      <div class="col-6">
-                        <button
-                          type="button"
-                          class="btn btn-outline-primary btn-sm w-100"
-                          :disabled="feedingLoading"
-                          @click="registerFeedingDay(pet)"
-                        >
-                          <i class="bi bi-plus-circle me-1"></i>
-                          <span v-if="feedingLoading">Registrando...</span>
-                          <span v-else>Día comida</span>
-                        </button>
-                      </div>
-                    </div>
-                    <button
-                      type="button"
-                      class="btn btn-outline-danger btn-sm"
-                      @click="deletePet(pet)"
-                    >
-                      <i class="bi bi-trash me-1"></i>Eliminar mascota
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
         </div>
       </div>
     </div>
 
-    <!-- Modal para gestionar ingredientes de mascota -->
-    <div v-if="managingIngredients" class="modal d-block" style="background: rgba(0,0,0,0.5);">
-      <div class="modal-dialog modal-lg">
+    <!-- Ingredients Modal -->
+    <div v-if="managingIngredients" class="modal d-block" style="background: rgba(0,0,0,0.5); z-index: var(--z-modal);">
+      <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
         <div class="modal-content">
           <div class="modal-header">
-            <h5 class="modal-title">Gestionar ingredientes de la mascota</h5>
-            <button type="button" class="btn-close" @click="cancelManageIngredients"></button>
+            <h5 class="modal-title">
+              <i class="bi bi-grid me-2" style="color: var(--color-primary);"></i>
+              Gestionar Ingredientes
+            </h5>
+            <button type="button" class="btn-close" @click="cancelManageIngredients" aria-label="Cerrar"></button>
           </div>
           <div class="modal-body">
-            <p class="text-muted ">Selecciona los ingredientes que forman parte de la dieta de esta mascota y define la cantidad en gramos por porción.</p>
-            <div v-if="petIngredients.length === 0" class="text-muted">
-              No hay ingredientes disponibles. Crea algunos ingredientes primero.
+            <p style="color: var(--color-text-secondary); font-size: var(--font-size-sm);">
+              Selecciona los ingredientes y define los gramos por porción
+            </p>
+            <div v-if="petIngredients.length === 0" style="color: var(--color-text-muted);">
+              No hay ingredientes disponibles
             </div>
             <div v-else>
-              <div v-for="ing in petIngredients" :key="ing.ingredientId" class="row mb-3 align-items-center border-bottom pb-2">
-                <div class="col-md-1">
-                  <input
-                    type="checkbox"
-                    class="form-check-input"
-                    v-model="ing.selected"
-                  >
-                </div>
-                <div class="col-md-5">
-                  <strong>{{ ing.name }}</strong>
-                </div>
-                <div class="col-md-6">
-                  <div class="input-group input-group-sm">
+              <div v-for="ing in petIngredients" :key="ing.ingredientId" class="mb-3 p-3 rounded" style="background-color: var(--color-muted);">
+                <div class="row align-items-center g-3">
+                  <div class="col-auto">
                     <input
-                      type="number"
-                      class="form-control"
-                      v-model.number="ing.gramsPerPortion"
-                      min="1"
-                      :disabled="!ing.selected"
-                      placeholder="Gramos por porción"
+                      type="checkbox"
+                      class="form-check-input"
+                      v-model="ing.selected"
+                      style="width: 20px; height: 20px;"
                     >
-                    <span class="input-group-text">g</span>
+                  </div>
+                  <div class="col">
+                    <strong>{{ ing.name }}</strong>
+                  </div>
+                  <div class="col-auto">
+                    <div class="input-group">
+                      <input
+                        type="number"
+                        class="form-control"
+                        v-model.number="ing.gramsPerPortion"
+                        min="1"
+                        :disabled="!ing.selected"
+                        placeholder="Gramos"
+                        style="min-width: 100px;"
+                      >
+                      <span class="input-group-text">g</span>
+                    </div>
                   </div>
                 </div>
               </div>
             </div>
           </div>
           <div class="modal-footer">
-            <button type="button" class="btn btn-secondary" @click="cancelManageIngredients">
+            <button type="button" class="btn btn-outline-secondary" @click="cancelManageIngredients">
               Cancelar
             </button>
             <button type="button" class="btn btn-primary" @click="savePetIngredients">
-              Guardar ingredientes
+              <i class="bi bi-check-circle me-1"></i>
+              Guardar Ingredientes
             </button>
           </div>
         </div>
@@ -729,95 +760,36 @@ onMounted(() => {
 </template>
 
 <style scoped>
-/* Estilos para cards de mascotas en móvil */
 .pet-card .card {
-  border: 1px solid #dee2e6;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-  transition: box-shadow 0.3s ease;
+  transition: box-shadow var(--transition-base);
 }
 
 .pet-card .card:hover {
-  box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+  box-shadow: var(--shadow-md);
 }
 
-.pet-card .card-header {
-  background-color: #f8f9fa;
-  border-bottom: 1px solid #dee2e6;
-  padding: 0.75rem 1rem;
-}
-
-.pet-card .card-body {
-  padding: 1rem;
-}
-
-.ingredient-tags {
-  max-height: 60px;
-  overflow-y: auto;
-}
-
-.ingredient-tags .badge {
-  font-size: 0.75rem;
-  border: 1px solid #dee2e6;
-}
-
-/* Mejoras para inputs en mobile */
-@media (max-width: 767.98px) {
-  .pet-card .form-control-sm {
-    font-size: 0.875rem;
-  }
-
-  .pet-card .btn-sm {
-    padding: 0.25rem 0.5rem;
-    font-size: 0.875rem;
-  }
-
-  /* Espaciado optimizado para mobile */
-  .pet-card .row {
-    margin-left: -0.5rem;
-    margin-right: -0.5rem;
-  }
-
-  .pet-card .row > * {
-    padding-left: 0.5rem;
-    padding-right: 0.5rem;
+@media (prefers-reduced-motion: reduce) {
+  .pet-card .card {
+    transition: none;
   }
 }
 
-/* Indicadores de estado mejorados */
-.pet-card .text-success {
-  color: #198754 !important;
+.modal {
+  backdrop-filter: blur(4px);
 }
 
-.pet-card .badge.bg-primary {
-  background-color: #0d6efd !important;
+.modal-content {
+  animation: modalSlideIn 0.3s ease-out;
 }
 
-.pet-card .badge.bg-light {
-  background-color: #e9ecef !important;
-  color: #495057 !important;
-}
-
-/* Animaciones sutiles */
-.pet-card .btn {
-  transition: all 0.2s ease;
-}
-
-.pet-card .btn:hover:not(:disabled) {
-  transform: translateY(-1px);
-}
-
-/* Mejora de accesibilidad en mobile */
-@media (max-width: 575.98px) {
-  .pet-card .card-body {
-    padding: 0.75rem;
+@keyframes modalSlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
   }
-
-  .pet-card .btn {
-    padding: 0.375rem 0.75rem;
-  }
-
-  .pet-card h5 {
-    font-size: 1.1rem;
+  to {
+    opacity: 1;
+    transform: translateY(0);
   }
 }
 </style>

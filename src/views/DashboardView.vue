@@ -194,158 +194,170 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div class="dashboard">
-    <div class="d-flex justify-content-between align-items-center mb-4">
+  <div class="dashboard fade-in">
+    <!-- Header -->
+    <div class="d-flex justify-content-between align-items-start mb-4">
       <div>
-        <h1 class="h2 mb-0">Dashboard</h1>
-        <small class="text-muted">
-          Se actualiza automáticamente cada 30 seg
+        <h1 class="h3 mb-1" style="color: var(--color-text-primary);">Dashboard</h1>
+        <small style="color: var(--color-text-secondary);">
+          <i class="bi bi-arrow-repeat me-1"></i>
+          Auto cada 30s
           <span v-if="lastDashboardUpdate" class="text-success ms-1">
-            (Última: {{ lastDashboardUpdate.toLocaleTimeString() }})
+            · {{ lastDashboardUpdate.toLocaleTimeString() }}
           </span>
         </small>
       </div>
-      <button class="btn btn-outline-primary btn-sm" @click="loadDashboardData" :disabled="loading">
+      <button 
+        class="btn btn-outline-primary btn-sm" 
+        @click="loadDashboardData" 
+        :disabled="loading"
+        aria-label="Actualizar dashboard"
+      >
         <span v-if="loading" class="spinner-border spinner-border-sm me-1" role="status"></span>
         <i v-else class="bi bi-arrow-clockwise me-1"></i>
-        {{ loading ? 'Actualizando...' : 'Actualizar' }}
+        <span class="d-none d-sm-inline">{{ loading ? 'Actualizando...' : 'Actualizar' }}</span>
       </button>
     </div>
 
-    <!-- Loading spinner -->
-    <div v-if="loading" class="text-center py-5">
-      <div class="spinner-border text-primary" role="status">
-        <span class="visually-hidden">Cargando...</span>
-      </div>
-      <p class="mt-2 text-muted">Cargando estadísticas...</p>
-    </div>
-
     <!-- Error message -->
-    <div v-else-if="error" class="alert alert-danger" role="alert">
+    <div v-if="error" class="alert alert-danger mb-4" role="alert">
       <i class="bi bi-exclamation-circle me-2"></i>
       {{ error }}
     </div>
 
+    <!-- Loading state -->
+    <div v-if="loading && petStatistics.length === 0" class="text-center py-5">
+      <div class="spinner-border mb-3" role="status" style="color: var(--color-primary);"></div>
+      <p style="color: var(--color-text-secondary);">Cargando estadísticas...</p>
+    </div>
+
     <!-- Dashboard content -->
-    <div v-else>
-      <!-- Estadísticas por mascota -->
-      <div class="row mb-4">
-        <div class="col-12">
-          <div class="card">
-            <div class="card-header">
-              <h5 class="card-title mb-0">
-                <i class="bi bi-graph-up me-2"></i>
-                Estadísticas por Mascota
-              </h5>
-            </div>
-            <div class="card-body">
-              <div v-if="petStatistics.length === 0" class="text-center py-3">
-                <p class="text-muted mb-0">No tienes mascotas registradas aún.</p>
-                <RouterLink to="/app/pets" class="btn btn-primary btn-sm mt-2">
-                  Agregar Primera Mascota
-                </RouterLink>
+    <div v-else-if="petStatistics.length > 0">
+      <!-- Pet Statistics Cards -->
+      <div class="row g-3 g-md-4">
+        <div v-for="stat in petStatistics" :key="stat.pet.id" class="col-12 col-md-6">
+          <div class="card h-100">
+            <!-- Card Header -->
+            <div class="card-header d-flex justify-content-between align-items-center">
+              <h6 class="mb-0 fw-bold" style="color: var(--color-text-primary);">
+                <i class="bi bi-heart-fill me-2" style="color: var(--color-primary);"></i>
+                {{ stat.pet.name }}
+              </h6>
+              <div class="d-flex align-items-center gap-2 flex-wrap">
+                <span class="badge" style="background-color: var(--color-muted); color: var(--color-text-secondary);">
+                  {{ getPetAge(stat.pet) }} años
+                </span>
+                <span
+                  v-if="getPetInventoryInfo(stat.pet.id)"
+                  class="badge"
+                  :style="{
+                    backgroundColor: getUpdateStatusBadge(getPetInventoryInfo(stat.pet.id)).class.includes('success') ? 'var(--color-success)' :
+                                    getUpdateStatusBadge(getPetInventoryInfo(stat.pet.id)).class.includes('info') ? 'var(--color-info)' :
+                                    getUpdateStatusBadge(getPetInventoryInfo(stat.pet.id)).class.includes('warning') ? 'var(--color-warning)' :
+                                    'var(--color-danger)',
+                    color: 'white'
+                  }"
+                >
+                  {{ getUpdateStatusBadge(getPetInventoryInfo(stat.pet.id)).text }}
+                </span>
               </div>
-              <div v-else class="row">
-                <div v-for="stat in petStatistics" :key="stat.pet.id" class="col-lg-6 mb-3">
-                  <div class="card h-100">
-                    <div class="card-header bg-light">
-                      <div class="d-flex justify-content-between align-items-center">
-                        <h6 class="mb-0 fw-bold">{{ stat.pet.name }}</h6>
-                        <div class="d-flex align-items-center gap-2">
-                          <span class="badge bg-secondary">{{ getPetAge(stat.pet) }} años</span>
-                          <small class="text-muted">({{ calculateRealAge(getPetAge(stat.pet)).toFixed(1) }} real)</small>
-                          <span
-                            v-if="getPetInventoryInfo(stat.pet.id)"
-                            :class="['badge', getUpdateStatusBadge(getPetInventoryInfo(stat.pet.id)).class]"
-                          >
-                            {{ getUpdateStatusBadge(getPetInventoryInfo(stat.pet.id)).text }}
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-                    <div class="card-body">
-                      <div class="row g-3">
-                        <div class="col-6">
-                          <div class="text-center p-2 bg-light rounded">
-                            <div class="fw-bold text-success fs-4">{{ stat.completeBags }}</div>
-                            <small class="text-muted">Bolsas Completas</small>
-                          </div>
-                        </div>
-                        <div class="col-6">
-                          <div class="text-center p-2 bg-light rounded">
-                            <div class="fw-bold text-warning fs-4">{{ stat.incompleteBagsCount }}</div>
-                            <small class="text-muted">Bolsas Incompletas</small>
-                          </div>
-                        </div>
-                        <div class="col-12">
-                          <div class="p-2 bg-light rounded">
-                            <div class="mb-2">
-                              <strong>Comidas diarias:</strong> {{ stat.pet.mealsPerDay }}
-                            </div>
-                            <div v-if="stat.pet.feedingTimes && stat.pet.feedingTimes.length > 0" class="mb-2">
-                              <strong>Horarios:</strong> {{ stat.pet.feedingTimes.join(', ') }}
-                            </div>
-                            <div class="mb-2">
-                              <strong>Se acaba el: </strong>
-                              <span :class="stat.shouldBuyNow ? 'text-danger fw-bold' : 'text-muted'">
-                                {{ formatDate(stat.projectedEmptyDate) }}
-                              </span>
-                            </div>
-                            <div v-if="stat.recommendedPurchaseDate">
-                              <strong>Comprar antes del: </strong>
-                              <span :class="stat.shouldBuyNow ? 'text-danger fw-bold' : 'text-success'">
-                                {{ formatDate(stat.recommendedPurchaseDate) }}
-                              </span>
-                              <span v-if="stat.shouldBuyNow" class="badge bg-danger ms-2">
-                                ¡Comprar ahora!
-                              </span>
-                            </div>
-                            <div v-if="getPetInventoryInfo(stat.pet.id)" class="mt-2 pt-2 border-top">
-                              <div class="d-flex justify-content-between align-items-center mb-1">
-                                <button
-                                  class="btn btn-outline-primary btn-sm"
-                                  :disabled="forceUpdateLoading[stat.pet.id]"
-                                  @click="forceInventoryUpdate(stat.pet.id, stat.pet.name)"
-                                >
-                                  <span v-if="forceUpdateLoading[stat.pet.id]" class="spinner-border spinner-border-sm me-1" role="status"></span>
-                                  <i v-else class="bi bi-arrow-clockwise me-1"></i>
-                                  {{ forceUpdateLoading[stat.pet.id] ? 'Actualizando...' : 'Forzar' }}
-                                </button>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
+            </div>
+            
+            <!-- Card Body -->
+            <div class="card-body">
+              <!-- Stats Grid -->
+              <div class="row g-3 mb-3">
+                <div class="col-6">
+                  <div class="text-center p-3 rounded" style="background-color: var(--color-success-bg);">
+                    <div class="fw-bold fs-4" style="color: var(--color-success);">{{ stat.completeBags }}</div>
+                    <small style="color: var(--color-text-secondary);">Bolsas Completas</small>
                   </div>
                 </div>
+                <div class="col-6">
+                  <div class="text-center p-3 rounded" style="background-color: var(--color-warning-bg);">
+                    <div class="fw-bold fs-4" style="color: var(--color-warning);">{{ stat.incompleteBagsCount }}</div>
+                    <small style="color: var(--color-text-secondary);">Incompletas</small>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Info Section -->
+              <div class="p-3 rounded mb-3" style="background-color: var(--color-muted);">
+                <div class="mb-2 d-flex justify-content-between">
+                  <span style="color: var(--color-text-secondary);">Comidas diarias:</span>
+                  <strong>{{ stat.pet.mealsPerDay }}</strong>
+                </div>
+                <div v-if="stat.pet.feedingTimes && stat.pet.feedingTimes.length > 0" class="mb-2 d-flex justify-content-between">
+                  <span style="color: var(--color-text-secondary);">Horarios:</span>
+                  <strong>{{ stat.pet.feedingTimes.join(', ') }}</strong>
+                </div>
+                <div class="mb-2 d-flex justify-content-between align-items-center">
+                  <span style="color: var(--color-text-secondary);">Se acaba el:</span>
+                  <span :style="{
+                    color: stat.shouldBuyNow ? 'var(--color-danger)' : 'var(--color-text-secondary)',
+                    fontWeight: stat.shouldBuyNow ? '600' : '400'
+                  }">
+                    {{ formatDate(stat.projectedEmptyDate) }}
+                  </span>
+                </div>
+                <div v-if="stat.recommendedPurchaseDate" class="d-flex justify-content-between align-items-center">
+                  <span style="color: var(--color-text-secondary);">Comprar antes del:</span>
+                  <div>
+                    <span :style="{
+                      color: stat.shouldBuyNow ? 'var(--color-danger)' : 'var(--color-success)',
+                      fontWeight: stat.shouldBuyNow ? '600' : '400'
+                    }">
+                      {{ formatDate(stat.recommendedPurchaseDate) }}
+                    </span>
+                    <span v-if="stat.shouldBuyNow" class="badge ms-2" style="background-color: var(--color-danger); color: white;">
+                      ¡Comprar!
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Force Update Button -->
+              <div v-if="getPetInventoryInfo(stat.pet.id)" class="pt-3" style="border-top: 1px solid var(--color-border);">
+                <button
+                  class="btn btn-outline-primary btn-sm w-100"
+                  :disabled="forceUpdateLoading[stat.pet.id]"
+                  @click="forceInventoryUpdate(stat.pet.id, stat.pet.name)"
+                >
+                  <span v-if="forceUpdateLoading[stat.pet.id]" class="spinner-border spinner-border-sm me-1" role="status"></span>
+                  <i v-else class="bi bi-arrow-clockwise me-1"></i>
+                  {{ forceUpdateLoading[stat.pet.id] ? 'Actualizando...' : 'Forzar Actualización' }}
+                </button>
               </div>
             </div>
           </div>
         </div>
       </div>
     </div>
+
+    <!-- Empty State -->
+    <div v-else class="text-center py-5">
+      <i class="bi bi-inbox mb-3" style="font-size: 3rem; color: var(--color-text-muted);"></i>
+      <p class="mb-3" style="color: var(--color-text-secondary);">No tienes mascotas registradas aún.</p>
+      <RouterLink to="/app/pets" class="btn btn-primary">
+        <i class="bi bi-plus-circle me-2"></i>
+        Agregar Primera Mascota
+      </RouterLink>
+    </div>
   </div>
 </template>
 
 <style scoped>
 .dashboard .card {
-  box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
-  border: 1px solid rgba(0, 0, 0, 0.125);
+  transition: all var(--transition-base);
 }
 
-.dashboard .card-header {
-  background-color: rgba(0, 0, 0, 0.03);
-  border-bottom: 1px solid rgba(0, 0, 0, 0.125);
+.dashboard .card:hover {
+  box-shadow: var(--shadow-md);
 }
 
-.dashboard .bg-light {
-  background-color: #f8f9fa !important;
-}
-
-@media (max-width: 768px) {
-  .dashboard .row > .col-md-3 {
-    margin-bottom: 1rem;
+@media (prefers-reduced-motion: reduce) {
+  .dashboard .card {
+    transition: none;
   }
 }
 </style>

@@ -136,6 +136,7 @@ const isActive = (path) => {
             :to="item.to" 
             class="bottom-nav-item"
             :class="{ active: isActive(item.to) }"
+            :aria-current="isActive(item.to) ? 'page' : undefined"
           >
             <i :class="['bi', item.icon]"></i>
             <span>{{ item.label }}</span>
@@ -157,7 +158,8 @@ const isActive = (path) => {
 }
 
 .nav-link.active {
-  color: var(--color-primary) !important;
+  color: white !important;
+  border-bottom: 2px solid white;
 }
 
 @media (max-width: 767.98px) {

@@ -4,6 +4,12 @@ on:
   push:
     branches:
       - main
+  workflow_dispatch:
+    inputs:
+      branch:
+        description: 'Rama a deployar'
+        required: true
+        default: 'main'
 
 jobs:
   deploy:
@@ -20,8 +26,10 @@ jobs:
 
             cd /var/www/html/app-barf
 
-            echo "→ Pulling latest changes..."
-            git pull --no-rebase origin main
+            echo "→ Pulling branch ${{ github.event.inputs.branch || 'main' }}..."
+            git fetch origin
+            git checkout ${{ github.event.inputs.branch || 'main' }}
+            git pull --no-rebase origin ${{ github.event.inputs.branch || 'main' }}
 
             echo "→ Installing dependencies..."
             npm ci --prefer-offline

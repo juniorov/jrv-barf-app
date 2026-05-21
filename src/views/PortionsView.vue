@@ -1,6 +1,9 @@
 <script setup>
 import { onMounted, ref, computed } from 'vue';
 import api from '../api/client.js';
+import { useToastStore } from '../stores/toast.js';
+
+const toast = useToastStore();
 
 const pets = ref([]);
 const bags = ref([]);
@@ -48,9 +51,9 @@ const savePortions = async () => {
     }
 
     await Promise.all(updates);
-    success.value = 'Porciones deseadas guardadas correctamente';
+    toast.success('Porciones guardadas correctamente');
   } catch (e) {
-    error.value = e.message || 'No se pudieron guardar las porciones';
+    toast.error(e.message || 'No se pudieron guardar las porciones');
   } finally {
     saving.value = false;
   }
@@ -183,6 +186,88 @@ const totals = computed(() => {
   return result;
 });
 
+const shoppingSummary = computed(() => {
+  const summary = [];
+  const grouped = {};
+
+  totals.value.forEach(row => {
+    if (!grouped[row.ingredientName]) {
+      grouped[row.ingredientName] = 0;
+    }
+    grouped[row.ingredientName] += row.totalGrams;
+  });
+
+  for (const [name, grams] of Object.entries(grouped)) {
+    summary.push({ name, grams, kilos: grams >= 1000 ? grams / 1000 : 0 });
+  }
+
+  return summary;
+});
+
+const shoppingSummaryText = computed(() => {
+  return shoppingSummary.value
+    .map(item => {
+      if (item.kilos > 0) {
+        return `${item.name} ${item.kilos.toFixed(1)}kg (${item.grams}g)`;
+      }
+      return `${item.name} ${item.grams}g`;
+    })
+    .join('\n');
+});
+
+const editablePortions = computed(() => {
+  const map = {};
+  totals.value.forEach(row => {
+    const pet = pets.value.find(p => p._id === row.petId);
+    if (!pet || !pet.ingredients) return;
+    const ing = pet.ingredients.find(i => i.ingredient._id === row.ingredientId);
+    if (!ing) return;
+    map[`${row.petId}-${row.ingredientId}`] = ing;
+  });
+  return map;
+});
+
+const updateDesiredPortions = (petId, ingredientId, value) => {
+  const pet = pets.value.find(p => p._id === petId);
+  if (!pet || !pet.ingredients) return;
+  const ing = pet.ingredients.find(i => i.ingredient._id === ingredientId);
+  if (ing) {
+    ing.desiredPortions = Number(value) || 0;
+  }
+};
+
+const copyShoppingList = async () => {
+  try {
+    await navigator.clipboard.writeText(shoppingSummaryText.value);
+    toast.success('Lista copiada al portapapeles');
+  } catch {
+    const textarea = document.createElement('textarea');
+    textarea.value = shoppingSummaryText.value;
+    document.body.appendChild(textarea);
+    textarea.select();
+    document.execCommand('copy');
+    document.body.removeChild(textarea);
+    toast.success('Lista copiada al portapapeles');
+  }
+};
+
+const shareShoppingList = async () => {
+  const text = `🛒 Lista de compras JRV BARF:\n\n${shoppingSummaryText.value}`;
+  
+  if (navigator.share) {
+    try {
+      await navigator.share({
+        title: 'Lista de compras JRV BARF',
+        text: text,
+      });
+    } catch {
+      // User cancelled share
+    }
+  } else {
+    copyShoppingList();
+  }
+};
+
 onMounted(loadPets);
 </script>
 
@@ -242,12 +327,8 @@ onMounted(loadPets);
                     <div class="col-6">
                       <label class="form-label d-block">Porciones deseadas</label>
                       <input
-                        v-model.number="
-                          pets
-                            .find(p => p._id === row.petId)
-                            .ingredients.find(i => i.ingredient._id === row.ingredientId)
-                            .desiredPortions
-                        "
+                        :value="editablePortions[`${row.petId}-${row.ingredientId}`]?.desiredPortions || 0"
+                        @input="updateDesiredPortions(row.petId, row.ingredientId, $event.target.value)"
                         type="number"
                         min="0"
                         class="form-control"
@@ -304,12 +385,8 @@ onMounted(loadPets);
                     <td>{{ row.gramsPerPortion }} g</td>
                     <td style="max-width: 120px;">
                       <input
-                        v-model.number="
-                          pets
-                            .find(p => p._id === row.petId)
-                            .ingredients.find(i => i.ingredient._id === row.ingredientId)
-                            .desiredPortions
-                        "
+                        :value="editablePortions[`${row.petId}-${row.ingredientId}`]?.desiredPortions || 0"
+                        @input="updateDesiredPortions(row.petId, row.ingredientId, $event.target.value)"
                         type="number"
                         min="0"
                         class="form-control form-control-sm"
@@ -353,6 +430,61 @@ onMounted(loadPets);
               <i v-else class="bi bi-check-circle me-2"></i>
               Guardar Porciones
             </button>
+          </div>
+
+          <!-- Shopping Summary -->
+          <div class="card mt-4" style="border: 2px solid var(--color-primary);">
+            <div class="card-header" style="background-color: var(--color-primary); color: white;">
+              <div class="d-flex justify-content-between align-items-center">
+                <h5 class="h6 mb-0">
+                  <i class="bi bi-cart3 me-2"></i>
+                  Resumen de Compras
+                </h5>
+                <div class="d-flex gap-2">
+                  <button 
+                    type="button" 
+                    class="btn btn-sm" 
+                    style="background-color: rgba(255,255,255,0.2); color: white; border: none;"
+                    @click="copyShoppingList"
+                    aria-label="Copiar lista"
+                  >
+                    <i class="bi bi-clipboard me-1"></i>Copiar
+                  </button>
+                  <button 
+                    v-if="navigator && navigator.share"
+                    type="button" 
+                    class="btn btn-sm" 
+                    style="background-color: rgba(255,255,255,0.2); color: white; border: none;"
+                    @click="shareShoppingList"
+                    aria-label="Compartir lista"
+                  >
+                    <i class="bi bi-share me-1"></i>Enviar
+                  </button>
+                </div>
+              </div>
+            </div>
+            <div class="card-body">
+              <div class="shopping-list">
+                <div 
+                  v-for="item in shoppingSummary" 
+                  :key="item.name"
+                  class="shopping-item"
+                >
+                  <span class="shopping-name">{{ item.name }}</span>
+                  <span class="shopping-amount">
+                    <span v-if="item.kilos > 0" class="fw-bold">{{ item.kilos.toFixed(1) }}kg</span>
+                    <span v-else class="fw-bold">{{ item.grams }}g</span>
+                    <span v-if="item.kilos > 0" class="text-muted small ms-1">({{ item.grams }}g)</span>
+                  </span>
+                </div>
+              </div>
+              <div class="mt-3 pt-3" style="border-top: 1px dashed var(--color-border);">
+                <small style="color: var(--color-text-secondary);">
+                  <i class="bi bi-info-circle me-1"></i>
+                  Toca "Copiar" para pegar en WhatsApp u otra app
+                </small>
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -448,4 +580,31 @@ onMounted(loadPets);
     </div>
   </div>
 </template>
+
+<style scoped>
+.shopping-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.shopping-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 12px;
+  background-color: var(--color-muted);
+  border-radius: var(--radius-md);
+}
+
+.shopping-name {
+  font-weight: 500;
+  color: var(--color-text-primary);
+}
+
+.shopping-amount {
+  color: var(--color-success);
+  font-size: var(--font-size-base);
+}
+</style>
 

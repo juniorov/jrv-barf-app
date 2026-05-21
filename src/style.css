@@ -382,6 +382,9 @@ html {
 
 .bottom-nav-item.active {
   color: var(--color-primary);
+  background-color: rgba(16, 185, 129, 0.08);
+  border-top: 3px solid var(--color-primary);
+  padding-top: calc(var(--spacing-2) - 3px);
 }
 
 .bottom-nav-item i {

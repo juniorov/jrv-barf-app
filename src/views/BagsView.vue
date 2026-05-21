@@ -3,17 +3,35 @@ import { onMounted, ref, computed } from 'vue';
 import api from '../api/client.js';
 import { useAuthStore } from '../stores/auth.js';
 import { useBagStore } from '../stores/bags.js';
+import { useToastStore } from '../stores/toast.js';
 
 const auth = useAuthStore();
 const bagStore = useBagStore();
+const toast = useToastStore();
 
-const ingredients = ref([]);
 const pets = ref([]);
 const bags = ref([]);
+const allBags = ref([]);
 const loading = ref(false);
 const saving = ref(false);
 const error = ref('');
 const success = ref('');
+const searchQuery = ref('');
+const showCompleted = ref(false);
+
+const incompleteBags = computed(() => allBags.value.filter(b => !b.isCompleted));
+const completedBags = computed(() => allBags.value.filter(b => b.isCompleted));
+
+const displayBags = computed(() => showCompleted.value ? allBags.value : incompleteBags.value);
+
+const filteredBags = computed(() => {
+  if (!searchQuery.value.trim()) return displayBags.value;
+  const query = searchQuery.value.toLowerCase();
+  return displayBags.value.filter(b => 
+    b.name.toLowerCase().includes(query) || 
+    (b.pet && b.pet.name.toLowerCase().includes(query))
+  );
+});
 
 const maxIngredientsPerBag = computed(() => {
   if (form.value.petId) {
@@ -37,9 +55,8 @@ const availableIngredients = computed(() => {
   if (!form.value.petId) return [];
 
   const selectedPet = pets.value.find(p => p._id === form.value.petId);
-  const ingredients = selectedPet?.ingredients || [];
-  console.log('Available ingredients for pet', selectedPet?.name, ':', ingredients);
-  return ingredients;
+  const petIngredients = selectedPet?.ingredients || [];
+  return petIngredients;
 });
 
 const resetForm = () => {
@@ -61,29 +78,24 @@ const updateSelectionsForPet = () => {
 
   const selectedPet = pets.value.find(p => p._id === form.value.petId);
   const petIngredients = selectedPet?.ingredients || [];
-  console.log('Updating selections for pet:', selectedPet?.name, 'ingredients:', petIngredients);
 
   form.value.selections = petIngredients.map((i) => ({
     ingredientId: i.ingredient._id,
     selected: false,
     gramsPerBag: i.gramsPerPortion || 100,
   }));
-
-  console.log('New selections:', form.value.selections);
 };
 
 const loadData = async () => {
   loading.value = true;
   error.value = '';
   try {
-    const [ing, bs, ps] = await Promise.all([
-      api.get('/ingredients'),
-      api.get('/bags'), // Obtener TODAS las bolsas
+    const [bs, ps] = await Promise.all([
+      api.get('/bags'),
       api.get('/pets'),
     ]);
-    ingredients.value = ing;
     pets.value = ps;
-
+    allBags.value = bs;
     bags.value = bs.filter((b) => !b.isCompleted);
     resetForm();
   } catch (e) {
@@ -96,6 +108,8 @@ const loadData = async () => {
 const selectedCount = computed(
   () => form.value.selections.filter((s) => s.selected).length,
 );
+
+const maxReached = computed(() => selectedCount.value >= maxIngredientsPerBag.value);
 
 const onSubmit = async () => {
   error.value = '';
@@ -141,15 +155,19 @@ const onSubmit = async () => {
       bags.value = bags.value.map((b) =>
         b._id === updated._id ? updated : b,
       );
-      success.value = 'Bolsa actualizada correctamente';
+      allBags.value = allBags.value.map((b) =>
+        b._id === updated._id ? updated : b,
+      );
+      toast.success('Bolsa actualizada correctamente');
     } else {
       const created = await api.post('/bags', payload);
       bags.value.unshift(created);
-      success.value = 'Bolsa creada correctamente';
+      allBags.value.unshift(created);
+      toast.success('Bolsa creada correctamente');
     }
     resetForm();
   } catch (e) {
-    error.value = e.message || 'No se pudo guardar la bolsa';
+    toast.error(e.message || 'No se pudo guardar la bolsa');
   } finally {
     saving.value = false;
   }
@@ -161,7 +179,6 @@ const editBag = (bag) => {
   form.value.quantity = bag.quantity;
   form.value.petId = bag.pet?._id || null;
 
-  // Obtener ingredientes de la mascota
   const selectedPet = pets.value.find(p => p._id === form.value.petId);
   const petIngredients = selectedPet?.ingredients || [];
 
@@ -178,6 +195,14 @@ const editBag = (bag) => {
 
   success.value = '';
   error.value = '';
+
+  // Scroll to form
+  setTimeout(() => {
+    const formCard = document.querySelector('.card.mb-4');
+    if (formCard) {
+      formCard.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  }, 100);
 };
 
 const deleteBag = async (bag) => {
@@ -188,11 +213,12 @@ const deleteBag = async (bag) => {
 
   try {
     await api.delete(`/bags/${bag._id}`);
+    allBags.value = allBags.value.filter((b) => b._id !== bag._id);
     bags.value = bags.value.filter((b) => b._id !== bag._id);
-    success.value = 'Bolsa eliminada';
+    toast.success('Bolsa eliminada');
     error.value = '';
   } catch (e) {
-    error.value = e.message || 'No se pudo eliminar la bolsa';
+    toast.error(e.message || 'No se pudo eliminar la bolsa');
   }
 };
 
@@ -218,20 +244,15 @@ const completeBag = async (bag) => {
     const response = await api.post(`/bags/${bag._id}/complete`, {});
 
     // Remover la bolsa de la lista inmediatamente tras éxito
+    allBags.value = allBags.value.filter((b) => b._id !== bag._id);
     bags.value = bags.value.filter((b) => b._id !== bag._id);
 
     bagStore.markUpdated();
 
-    success.value = `✅ ${response.message || 'Bolsa completada correctamente y removida de la lista'}`;
-
-    // Limpiar mensaje después de 3 segundos
-    setTimeout(() => {
-      success.value = '';
-    }, 3000);
+    toast.success(response.message || 'Bolsa completada correctamente');
 
   } catch (e) {
-    error.value = e.message || 'No se pudo completar la bolsa';
-    console.error('Error completando bolsa:', e);
+    toast.error(e.message || 'No se pudo completar la bolsa');
   } finally {
     // Remover de la lista de procesamiento
     completingBags.value.delete(bag._id);
@@ -306,8 +327,12 @@ onMounted(loadData);
             <div class="col-12" v-if="form.petId">
               <label class="form-label d-flex justify-content-between">
                 <span>Ingredientes</span>
-                <span style="color: var(--color-text-secondary); font-size: var(--font-size-sm);">
+                <span 
+                  style="font-size: var(--font-size-sm); font-weight: 500;"
+                  :style="{ color: maxReached ? 'var(--color-danger)' : 'var(--color-text-secondary)' }"
+                >
                   {{ selectedCount }} / {{ maxIngredientsPerBag }}
+                  <i v-if="maxReached" class="bi bi-exclamation-circle-fill ms-1"></i>
                 </span>
               </label>
               
@@ -333,6 +358,7 @@ onMounted(loadData);
                           type="checkbox"
                           class="form-check-input"
                           style="width: 20px; height: 20px;"
+                          :disabled="maxReached && !selection.selected"
                         />
                       </td>
                       <td class="fw-semibold">
@@ -377,16 +403,70 @@ onMounted(loadData);
 
     <!-- Bags List -->
     <div class="d-flex justify-content-between align-items-center mb-3">
-      <h3 class="h6 mb-0">Bolsas Existentes</h3>
-      <span v-if="loading" class="small" style="color: var(--color-text-secondary);">
-        <span class="spinner-border spinner-border-sm me-1"></span>Cargando...
-      </span>
+      <h3 class="h6 mb-0">
+        {{ showCompleted ? 'Historial de Bolsas' : 'Bolsas Existentes' }}
+        <span class="badge ms-2" style="background-color: var(--color-muted); color: var(--color-text-secondary);">
+          {{ showCompleted ? completedBags.length : incompleteBags.length }}
+        </span>
+      </h3>
+      <div class="d-flex gap-2 align-items-center">
+        <button 
+          class="btn btn-sm"
+          :class="showCompleted ? 'btn-outline-secondary' : 'btn-outline-primary'"
+          @click="showCompleted = !showCompleted"
+        >
+          <i :class="showCompleted ? 'bi bi-clock-history' : 'bi bi-list-check'"></i>
+          <span class="d-none d-sm-inline ms-1">{{ showCompleted ? 'Incompletas' : 'Historial' }}</span>
+        </button>
+        <span v-if="loading" class="small" style="color: var(--color-text-secondary);">
+          <span class="spinner-border spinner-border-sm me-1"></span>Cargando...
+        </span>
+      </div>
     </div>
 
-    <div v-if="!bags.length && !loading" class="text-center py-5">
+    <!-- Search -->
+    <div class="mb-3">
+      <div class="input-group">
+        <span class="input-group-text" style="background-color: var(--color-muted); border-color: var(--color-border-strong);">
+          <i class="bi bi-search"></i>
+        </span>
+        <input
+          v-model="searchQuery"
+          type="text"
+          class="form-control"
+          placeholder="Buscar bolsa o mascota..."
+          style="border-color: var(--color-border-strong);"
+        />
+        <button
+          v-if="searchQuery"
+          type="button"
+          class="btn btn-outline-secondary"
+          @click="searchQuery = ''"
+          aria-label="Limpiar búsqueda"
+        >
+          <i class="bi bi-x"></i>
+        </button>
+      </div>
+    </div>
+
+    <div v-if="!allBags.length && !loading" class="text-center py-5">
       <i class="bi bi-bag mb-3" style="font-size: 3rem; color: var(--color-text-muted);"></i>
       <p class="mb-0" style="color: var(--color-text-secondary);">
         No hay bolsas incompletas
+      </p>
+    </div>
+
+    <div v-else-if="filteredBags.length === 0 && searchQuery" class="text-center py-5">
+      <i class="bi bi-search mb-3" style="font-size: 3rem; color: var(--color-text-muted);"></i>
+      <p class="mb-0" style="color: var(--color-text-secondary);">
+        No se encontraron bolsas
+      </p>
+    </div>
+
+    <div v-else-if="showCompleted && completedBags.length === 0" class="text-center py-5">
+      <i class="bi bi-clock-history mb-3" style="font-size: 3rem; color: var(--color-text-muted);"></i>
+      <p class="mb-0" style="color: var(--color-text-secondary);">
+        No hay bolsas completadas aún
       </p>
     </div>
 
@@ -394,21 +474,29 @@ onMounted(loadData);
       <!-- Mobile Cards -->
       <div class="d-md-none">
         <div
-          v-for="bag in bags"
+          v-for="bag in filteredBags"
           :key="bag._id"
           class="bag-card mx-3 mt-3"
-          :class="{ 'completing': completingBags.has(bag._id) }"
+          :class="{ 'completing': completingBags.has(bag._id), 'opacity-75': bag.isCompleted }"
         >
           <div class="card">
-            <div class="card-header" style="background-color: var(--color-muted);">
+            <div class="card-header" :style="{ backgroundColor: bag.isCompleted ? 'var(--color-success-bg)' : 'var(--color-muted)' }">
               <div class="d-flex justify-content-between align-items-start">
                 <div>
-                  <div class="fw-semibold">{{ bag.name }}</div>
+                  <div class="fw-semibold">
+                    {{ bag.name }}
+                    <span v-if="bag.isCompleted" class="badge ms-1" style="background-color: var(--color-success); color: white; font-size: 0.65rem;">
+                      <i class="bi bi-check-circle me-1"></i>Completada
+                    </span>
+                  </div>
                   <div v-if="bag.pet" class="small mt-1" style="color: var(--color-text-secondary);">
                     <i class="bi bi-heart-fill me-1" style="color: var(--color-primary);"></i>{{ bag.pet.name }}
                   </div>
+                  <div v-if="bag.completedAt" class="small" style="color: var(--color-text-muted);">
+                    {{ new Date(bag.completedAt).toLocaleDateString('es-ES') }}
+                  </div>
                 </div>
-                <span class="badge" style="background-color: var(--color-primary); color: white;">
+                <span class="badge" :style="{ backgroundColor: bag.isCompleted ? 'var(--color-success)' : 'var(--color-primary)', color: 'white' }">
                   {{ bag.quantity }} bolsas
                 </span>
               </div>
@@ -429,7 +517,7 @@ onMounted(loadData);
                 </div>
               </div>
             <!-- Actions -->
-            <div class="d-grid gap-2">
+            <div v-if="!bag.isCompleted" class="d-grid gap-2">
               <button type="button" class="btn btn-outline-secondary" @click="editBag(bag)">
                 <i class="bi bi-pencil me-1"></i>Editar
               </button>
@@ -466,13 +554,16 @@ onMounted(loadData);
                 </tr>
               </thead>
               <tbody>
-                <tr v-for="bag in bags" :key="bag._id" :class="{ 'table-secondary': completingBags.has(bag._id) }">
-                  <td class="fw-semibold">
-                    {{ bag.name }}
-                    <span v-if="completingBags.has(bag._id)" class="small ms-2" style="color: var(--color-text-secondary);">
-                      <i class="bi bi-arrow-clockwise spinning"></i> Completando...
-                    </span>
-                  </td>
+              <tr v-for="bag in filteredBags" :key="bag._id" :class="{ 'table-secondary': completingBags.has(bag._id), 'opacity-75': bag.isCompleted }">
+                <td class="fw-semibold">
+                  {{ bag.name }}
+                  <span v-if="bag.isCompleted" class="badge ms-1" style="background-color: var(--color-success); color: white; font-size: 0.65rem;">
+                    <i class="bi bi-check-circle me-1"></i>Completada
+                  </span>
+                  <span v-if="completingBags.has(bag._id)" class="small ms-2" style="color: var(--color-text-secondary);">
+                    <i class="bi bi-arrow-clockwise spinning"></i> Completando...
+                  </span>
+                </td>
                   <td>
                     <span v-if="bag.pet">
                       <i class="bi bi-heart-fill me-1" style="color: var(--color-primary);"></i>{{ bag.pet.name }}
@@ -493,26 +584,29 @@ onMounted(loadData);
                       </span>
                     </div>
                   </td>
-                  <td>
-                    <div class="d-flex gap-2">
-                      <button type="button" class="btn btn-outline-secondary btn-sm" @click="editBag(bag)" aria-label="Editar">
-                        <i class="bi bi-pencil"></i>
-                      </button>
-                      <button
-                        type="button"
-                        class="btn btn-outline-success btn-sm"
-                        @click="completeBag(bag)"
-                        :disabled="completingBags.has(bag._id)"
-                        aria-label="Completar"
-                      >
-                        <span v-if="completingBags.has(bag._id)" class="spinner-border spinner-border-sm" role="status"></span>
-                        <i v-else class="bi bi-check-lg"></i>
-                      </button>
-                      <button type="button" class="btn btn-outline-danger btn-sm" @click="deleteBag(bag)" aria-label="Eliminar">
-                        <i class="bi bi-trash"></i>
-                      </button>
-                    </div>
-                  </td>
+                <td>
+                  <div v-if="!bag.isCompleted" class="d-flex gap-2">
+                    <button type="button" class="btn btn-outline-secondary btn-sm" @click="editBag(bag)" aria-label="Editar">
+                      <i class="bi bi-pencil"></i>
+                    </button>
+                    <button
+                      type="button"
+                      class="btn btn-outline-success btn-sm"
+                      @click="completeBag(bag)"
+                      :disabled="completingBags.has(bag._id)"
+                      aria-label="Completar"
+                    >
+                      <span v-if="completingBags.has(bag._id)" class="spinner-border spinner-border-sm" role="status"></span>
+                      <i v-else class="bi bi-check-lg"></i>
+                    </button>
+                    <button type="button" class="btn btn-outline-danger btn-sm" @click="deleteBag(bag)" aria-label="Eliminar">
+                      <i class="bi bi-trash"></i>
+                    </button>
+                  </div>
+                  <div v-else style="color: var(--color-text-muted); font-size: var(--font-size-sm);">
+                    <i class="bi bi-check-circle me-1"></i>Finalizada
+                  </div>
+                </td>
                 </tr>
               </tbody>
             </table>

@@ -2,7 +2,9 @@ import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
 import { VitePWA } from 'vite-plugin-pwa'
 
-// https://vite.dev/config/
+const apiUrl = process.env.VITE_API_URL || 'https://jrv-barf-app.onrender.com/api';
+const apiDomain = new URL(apiUrl).origin;
+
 export default defineConfig({
   plugins: [
     vue(),
@@ -12,7 +14,7 @@ export default defineConfig({
         globPatterns: ['**/*.{js,css,html,ico,png,svg}'],
         runtimeCaching: [
           {
-            urlPattern: /^https:\/\/jrv-barf-app\.onrender\.com\/api\/.*/i,
+            urlPattern: new RegExp(`^${apiDomain.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\/api\\/.*`, 'i'),
             handler: 'NetworkFirst',
             options: {
               cacheName: 'api-cache',
@@ -28,8 +30,8 @@ export default defineConfig({
         name: 'BARF Food Manager',
         short_name: 'FoodBarf',
         description: 'Gestor de alimentación BARF para mascotas. Controla las porciones, ingredientes y bolsas de comida de tus mascotas.',
-        theme_color: '#4F46E5',
-        background_color: '#ffffff',
+        theme_color: '#10B981',
+        background_color: '#F8FFFE',
         display: 'standalone',
         scope: '/',
         start_url: '/',

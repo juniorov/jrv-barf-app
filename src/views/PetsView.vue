@@ -1,6 +1,10 @@
 <script setup>
 import { onMounted, ref, computed } from 'vue';
 import api from '../api/client.js';
+import { calculateAge, calculateRealAge } from '../utils/age.js';
+import { useToastStore } from '../stores/toast.js';
+
+const toast = useToastStore();
 
 const pets = ref([]);
 const ingredients = ref([]);
@@ -13,6 +17,15 @@ const managingIngredients = ref(null);
 const petIngredients = ref([]);
 const error = ref('');
 const success = ref('');
+const searchQuery = ref('');
+
+const filteredPets = computed(() => {
+  if (!searchQuery.value.trim()) return pets.value;
+  const query = searchQuery.value.toLowerCase();
+  return pets.value.filter(p => 
+    p.name.toLowerCase().includes(query)
+  );
+});
 
 const form = ref({
   id: null,
@@ -23,55 +36,10 @@ const form = ref({
   feedingTimesText: '',
 });
 
-// Calcular edad basada en fecha de nacimiento
-const calculateAge = (birthDate) => {
-  if (!birthDate) return 0;
-  
-  const today = new Date();
-  const birth = new Date(birthDate);
-  
-  // Calcular años, meses y días transcurridos
-  let years = today.getFullYear() - birth.getFullYear();
-  let months = today.getMonth() - birth.getMonth();
-  let days = today.getDate() - birth.getDate();
-  
-  // Ajustar si no ha pasado el día del cumpleaños este mes
-  if (days < 0) {
-    months--;
-    // Obtener días del mes anterior
-    const lastMonth = new Date(today.getFullYear(), today.getMonth(), 0);
-    days += lastMonth.getDate();
-  }
-  
-  // Ajustar si no ha pasado el mes del cumpleaños este año
-  if (months < 0) {
-    years--;
-    months += 12;
-  }
-  
-  // Convertir a años decimales (meses / 12 + días / 365)
-  const ageInYears = years + (months / 12) + (days / 365);
-  
-  return Math.max(0, Math.round(ageInYears * 10) / 10); // Redondear a 1 decimal
-};
-
-// Calcular edad humana equivalente (fórmula aproximada)
-// Calcular edad real del perro a partir de la edad humana
-// Fórmula actualizada: 1 año = 15 humanos, 2 años = 24, luego +4 por año adicional
-const calculateRealAge = (humanAge) => {
-  if (!humanAge || humanAge <= 0) return 0;
-  
-  if (humanAge <= 15) return humanAge / 15;
-  if (humanAge <= 24) return 2;
-  return 2 + (humanAge - 24) / 4;
-};
-
-// Edad calculada reactivamente
 const calculatedAge = computed(() => {
   return form.value.birthDate ? calculateAge(form.value.birthDate) : 0;
 });
 
-// Función para obtener la edad de una mascota (para mostrar en lista)
 const getPetAge = (pet) => {
   if (pet.birthDate) {
     return calculateAge(pet.birthDate);
@@ -106,7 +74,7 @@ const loadIngredients = async () => {
   try {
     ingredients.value = await api.get('/ingredients');
   } catch (e) {
-    console.error('No se pudieron cargar los ingredientes:', e);
+    error.value = e.message || 'No se pudieron cargar los ingredientes';
   }
 };
 
@@ -128,11 +96,11 @@ const updateInventory = async (pet) => {
       totalInventory: Number(tempInventory.value)
     });
     pets.value = pets.value.map((p) => (p._id === updated._id ? updated : p));
-    success.value = `Inventario de ${pet.name} actualizado a ${tempInventory.value} bolsas`;
+    toast.success(`Inventario de ${pet.name} actualizado a ${tempInventory.value} bolsas`);
     editingInventory.value = null;
     error.value = '';
   } catch (e) {
-    error.value = e.message || 'No se pudo actualizar el inventario';
+    toast.error(e.message || 'No se pudo actualizar el inventario');
   }
 };
 
@@ -151,13 +119,29 @@ const onSubmit = async () => {
       return;
     }
 
+    if (form.value.mealsPerDay < 1) {
+      error.value = 'Las comidas al día deben ser al menos 1';
+      return;
+    }
+
+    // Validate feeding times format
+    if (form.value.feedingTimesText.trim()) {
+      const times = form.value.feedingTimesText.split(',').map(t => t.trim()).filter(t => t);
+      const timeRegex = /^([01]\d|2[0-3]):[0-5]\d$/;
+      const invalidTimes = times.filter(t => !timeRegex.test(t));
+      if (invalidTimes.length > 0) {
+        error.value = `Horarios inválidos: ${invalidTimes.join(', ')}. Usa formato HH:MM (ej: 08:00, 14:00)`;
+        return;
+      }
+    }
+
     const calculatedAgeValue = calculateAge(form.value.birthDate);
 
     const payload = {
       name: form.value.name,
-      birthDate: form.value.birthDate, // Enviar como string ISO
-      age: Number(calculatedAgeValue.toFixed(1)), // Calcular y enviar edad
-      mealsPerDay: Number(form.value.mealsPerDay || 0),
+      birthDate: form.value.birthDate,
+      age: Number(calculatedAgeValue.toFixed(1)),
+      mealsPerDay: Number(form.value.mealsPerDay || 1),
       maxIngredientsPerBag: Number(form.value.maxIngredientsPerBag || 5),
       feedingTimes: form.value.feedingTimesText
         .split(',')
@@ -167,15 +151,15 @@ const onSubmit = async () => {
     if (form.value.id) {
       const updated = await api.put(`/pets/${form.value.id}`, payload);
       pets.value = pets.value.map((p) => (p._id === updated._id ? updated : p));
-      success.value = 'Mascota actualizada correctamente';
+      toast.success('Mascota actualizada correctamente');
     } else {
       const created = await api.post('/pets', payload);
       pets.value.unshift(created);
-      success.value = 'Mascota creada correctamente';
+      toast.success('Mascota creada correctamente');
     }
     resetForm();
   } catch (e) {
-    error.value = e.message || 'No se pudo guardar la mascota';
+    toast.error(e.message || 'No se pudo guardar la mascota');
   } finally {
     saving.value = false;
   }
@@ -214,19 +198,10 @@ const registerFeedingDay = async (pet) => {
   feedingLoading.value = true;
   try {
     const res = await api.post(`/pets/${pet._id}/feed-day`, {});
-    success.value = `✅ Se registró un día de comida para ${pet.name}. Inventario restante: ${res.remainingInventory} bolsas. El rebajo automático no se ejecutará hasta mañana.`;
-
-    // Debug: mostrar información de la actualización
-    console.log('🍽️ Registro de comida completado:', {
-      pet: pet.name,
-      remainingInventory: res.remainingInventory,
-      lastUpdate: res.lastInventoryUpdate,
-      timezone: res.timezone
-    });
-
+    toast.success(`Día de comida registrado para ${pet.name}. Inventario: ${res.remainingInventory} bolsas`);
     await loadPets();
   } catch (e) {
-    error.value = e.message || 'No se pudo registrar el día de comida';
+    toast.error(e.message || 'No se pudo registrar el día de comida');
   } finally {
     feedingLoading.value = false;
   }
@@ -241,10 +216,10 @@ const deletePet = async (pet) => {
   try {
     await api.delete(`/pets/${pet._id}`);
     pets.value = pets.value.filter((p) => p._id !== pet._id);
-    success.value = 'Mascota eliminada';
+    toast.success('Mascota eliminada');
     error.value = '';
   } catch (e) {
-    error.value = e.message || 'No se pudo eliminar la mascota';
+    toast.error(e.message || 'No se pudo eliminar la mascota');
   }
 };
 
@@ -252,9 +227,7 @@ const startManageIngredients = async (pet) => {
   try {
     managingIngredients.value = pet._id;
     const existingIngredients = await api.get(`/pets/${pet._id}/ingredients`);
-    console.log('Ingredientes existentes para', pet.name, ':', existingIngredients);
 
-    // Crear array con todos los ingredientes y marcar cuáles están asociados
     petIngredients.value = ingredients.value.map(ing => {
       const existing = existingIngredients.find(ei => ei.ingredient._id === ing._id);
       return {
@@ -265,7 +238,12 @@ const startManageIngredients = async (pet) => {
         desiredPortions: existing ? existing.desiredPortions || 0 : 0
       };
     });
-    console.log('Ingredientes preparados para el modal:', petIngredients.value);
+
+    // Focus first input after modal opens
+    setTimeout(() => {
+      const firstInput = document.querySelector('.modal input[type="checkbox"]');
+      if (firstInput) firstInput.focus();
+    }, 100);
   } catch (e) {
     error.value = e.message || 'No se pudieron cargar los ingredientes de la mascota';
   }
@@ -281,30 +259,26 @@ const savePetIngredients = async () => {
         desiredPortions: pi.desiredPortions || 0
       }));
 
-    console.log('Guardando ingredientes para mascota:', managingIngredients.value);
-    console.log('Ingredientes seleccionados:', selectedIngredients);
-
-    const result = await api.put(`/pets/${managingIngredients.value}/ingredients`, {
+    await api.put(`/pets/${managingIngredients.value}/ingredients`, {
       ingredients: selectedIngredients
     });
 
-    console.log('Resultado del guardado:', result);
-
-    success.value = 'Ingredientes de la mascota actualizados correctamente';
+    toast.success('Ingredientes actualizados correctamente');
     managingIngredients.value = null;
     error.value = '';
 
-    // Recargar mascotas para mostrar los cambios actualizados
     await loadPets();
   } catch (e) {
-    console.error('Error guardando ingredientes:', e);
-    error.value = e.message || 'No se pudieron guardar los ingredientes';
+    toast.error(e.message || 'No se pudieron guardar los ingredientes');
   }
 };
 
 const cancelManageIngredients = () => {
   managingIngredients.value = null;
   petIngredients.value = [];
+  // Restore focus to the triggering button
+  const triggerBtn = document.querySelector('[data-manage-ingredients]');
+  if (triggerBtn) triggerBtn.focus();
 };
 
 onMounted(() => {
@@ -396,10 +370,15 @@ onMounted(() => {
               </small>
             </div>
             <div class="col-12">
-              <button type="submit" class="btn btn-primary w-100" :disabled="saving">
-                <span v-if="saving" class="spinner-border spinner-border-sm me-2" />
-                {{ form.id ? 'Guardar Cambios' : 'Añadir Mascota' }}
-              </button>
+              <div class="d-flex gap-2">
+                <button type="submit" class="btn btn-primary flex-grow-1" :disabled="saving">
+                  <span v-if="saving" class="spinner-border spinner-border-sm me-2" />
+                  {{ form.id ? 'Guardar Cambios' : 'Añadir Mascota' }}
+                </button>
+                <button v-if="form.id" type="button" class="btn btn-outline-secondary" @click="resetForm">
+                  Cancelar
+                </button>
+              </div>
             </div>
           </div>
         </form>
@@ -415,6 +394,34 @@ onMounted(() => {
         </span>
       </div>
       <div class="card-body p-0">
+        <!-- Search -->
+        <div class="p-3" style="border-bottom: 1px solid var(--color-border);">
+          <div class="input-group">
+            <span class="input-group-text" style="background-color: var(--color-muted); border-color: var(--color-border-strong);">
+              <i class="bi bi-search"></i>
+            </span>
+            <input
+              v-model="searchQuery"
+              type="text"
+              class="form-control"
+              placeholder="Buscar mascota..."
+              style="border-color: var(--color-border-strong);"
+            />
+            <button
+              v-if="searchQuery"
+              type="button"
+              class="btn btn-outline-secondary"
+              @click="searchQuery = ''"
+              aria-label="Limpiar búsqueda"
+            >
+              <i class="bi bi-x"></i>
+            </button>
+          </div>
+          <div v-if="searchQuery && filteredPets.length === 0" class="mt-2 small" style="color: var(--color-text-muted);">
+            No se encontraron resultados para "{{ searchQuery }}"
+          </div>
+        </div>
+
         <div v-if="!pets.length && !loading" class="text-center py-5">
           <i class="bi bi-inbox mb-3" style="font-size: 3rem; color: var(--color-text-muted);"></i>
           <p class="mb-0" style="color: var(--color-text-secondary);">
@@ -423,8 +430,15 @@ onMounted(() => {
         </div>
         
         <!-- Mobile Cards View -->
+        <div v-else-if="filteredPets.length === 0 && searchQuery" class="text-center py-5">
+          <i class="bi bi-search mb-3" style="font-size: 3rem; color: var(--color-text-muted);"></i>
+          <p class="mb-0" style="color: var(--color-text-secondary);">
+            No se encontraron mascotas
+          </p>
+        </div>
+        
         <div v-else class="d-md-none">
-          <div v-for="pet in pets" :key="pet._id" class="pet-card">
+          <div v-for="pet in filteredPets" :key="pet._id" class="pet-card">
             <div class="card m-3">
               <!-- Pet Header -->
               <div class="card-header" style="background-color: var(--color-muted);">
@@ -520,6 +534,7 @@ onMounted(() => {
                     <button
                       type="button"
                       class="btn btn-outline-info btn-sm"
+                      data-manage-ingredients
                       @click="startManageIngredients(pet)"
                     >
                       <i class="bi bi-gear me-1"></i>Gestionar
@@ -595,7 +610,7 @@ onMounted(() => {
                 </tr>
               </thead>
               <tbody>
-                <tr v-for="pet in pets" :key="pet._id">
+                <tr v-for="pet in filteredPets" :key="pet._id">
                   <td class="fw-semibold">{{ pet.name }}</td>
                   <td>{{ getPetAge(pet).toFixed(1) }} años</td>
                   <td>{{ pet.mealsPerDay ?? 0 }}</td>
@@ -654,6 +669,7 @@ onMounted(() => {
                       <button
                         type="button"
                         class="btn btn-outline-info btn-sm"
+                        data-manage-ingredients
                         @click="startManageIngredients(pet)"
                       >
                         Gestionar
@@ -695,11 +711,21 @@ onMounted(() => {
     </div>
 
     <!-- Ingredients Modal -->
-    <div v-if="managingIngredients" class="modal d-block" style="background: rgba(0,0,0,0.5); z-index: var(--z-modal);">
+    <div
+      v-if="managingIngredients"
+      class="modal d-block"
+      style="background: rgba(0,0,0,0.5); z-index: var(--z-modal);"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="modal-title"
+      tabindex="-1"
+      @keydown.escape="cancelManageIngredients"
+      @click.self="cancelManageIngredients"
+    >
       <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
         <div class="modal-content">
           <div class="modal-header">
-            <h5 class="modal-title">
+            <h5 class="modal-title" id="modal-title">
               <i class="bi bi-grid me-2" style="color: var(--color-primary);"></i>
               Gestionar Ingredientes
             </h5>

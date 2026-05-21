@@ -1,12 +1,24 @@
 <script setup>
-import { onMounted, ref } from 'vue';
+import { onMounted, ref, computed } from 'vue';
 import api from '../api/client.js';
+import { useToastStore } from '../stores/toast.js';
+
+const toast = useToastStore();
 
 const ingredients = ref([]);
 const loading = ref(false);
 const saving = ref(false);
 const error = ref('');
 const success = ref('');
+const searchQuery = ref('');
+
+const filteredIngredients = computed(() => {
+  if (!searchQuery.value.trim()) return ingredients.value;
+  const query = searchQuery.value.toLowerCase();
+  return ingredients.value.filter(i => 
+    i.name.toLowerCase().includes(query) || i.code.toLowerCase().includes(query)
+  );
+});
 
 const form = ref({
   id: null,
@@ -52,15 +64,15 @@ const onSubmit = async () => {
       ingredients.value = ingredients.value.map((i) =>
         i._id === updated._id ? updated : i,
       );
-      success.value = 'Ingrediente actualizado correctamente';
+      toast.success('Ingrediente actualizado correctamente');
     } else {
       const created = await api.post('/ingredients', payload);
       ingredients.value.unshift(created);
-      success.value = 'Ingrediente creado correctamente';
+      toast.success('Ingrediente creado correctamente');
     }
     resetForm();
   } catch (e) {
-    error.value = e.message || 'No se pudo guardar el ingrediente';
+    toast.error(e.message || 'No se pudo guardar el ingrediente');
   } finally {
     saving.value = false;
   }
@@ -85,10 +97,10 @@ const deleteIngredient = async (ingredient) => {
   try {
     await api.delete(`/ingredients/${ingredient._id}`);
     ingredients.value = ingredients.value.filter((i) => i._id !== ingredient._id);
-    success.value = 'Ingrediente eliminado';
+    toast.success('Ingrediente eliminado');
     error.value = '';
   } catch (e) {
-    error.value = e.message || 'No se pudo eliminar el ingrediente';
+    toast.error(e.message || 'No se pudo eliminar el ingrediente');
   }
 };
 
@@ -141,10 +153,15 @@ onMounted(loadIngredients);
               />
             </div>
             <div class="col-12 col-md-2">
-              <button type="submit" class="btn btn-primary w-100" :disabled="saving">
-                <span v-if="saving" class="spinner-border spinner-border-sm me-2" />
-                {{ form.id ? 'Guardar' : 'Añadir' }}
-              </button>
+              <div class="d-flex gap-2">
+                <button type="submit" class="btn btn-primary flex-grow-1" :disabled="saving">
+                  <span v-if="saving" class="spinner-border spinner-border-sm me-2" />
+                  {{ form.id ? 'Guardar' : 'Añadir' }}
+                </button>
+                <button v-if="form.id" type="button" class="btn btn-outline-secondary" @click="resetForm">
+                  Cancelar
+                </button>
+              </div>
             </div>
           </div>
         </form>
@@ -160,6 +177,31 @@ onMounted(loadIngredients);
         </span>
       </div>
       <div class="card-body p-0">
+        <!-- Search -->
+        <div class="p-3" style="border-bottom: 1px solid var(--color-border);">
+          <div class="input-group">
+            <span class="input-group-text" style="background-color: var(--color-muted); border-color: var(--color-border-strong);">
+              <i class="bi bi-search"></i>
+            </span>
+            <input
+              v-model="searchQuery"
+              type="text"
+              class="form-control"
+              placeholder="Buscar ingrediente..."
+              style="border-color: var(--color-border-strong);"
+            />
+            <button
+              v-if="searchQuery"
+              type="button"
+              class="btn btn-outline-secondary"
+              @click="searchQuery = ''"
+              aria-label="Limpiar búsqueda"
+            >
+              <i class="bi bi-x"></i>
+            </button>
+          </div>
+        </div>
+
         <div v-if="!ingredients.length && !loading" class="text-center py-5">
           <i class="bi bi-inbox mb-3" style="font-size: 3rem; color: var(--color-text-muted);"></i>
           <p class="mb-0" style="color: var(--color-text-secondary);">
@@ -170,7 +212,7 @@ onMounted(loadIngredients);
         <template v-else>
           <!-- Mobile Cards -->
           <div class="d-md-none">
-            <div v-for="ingredient in ingredients" :key="ingredient._id" class="ingredient-item mx-3 mt-3">
+            <div v-for="ingredient in filteredIngredients" :key="ingredient._id" class="ingredient-item mx-3 mt-3">
               <div class="card">
                 <div class="card-body d-flex justify-content-between align-items-center">
                   <div>
@@ -212,7 +254,7 @@ onMounted(loadIngredients);
                   </tr>
                 </thead>
                 <tbody>
-                  <tr v-for="ingredient in ingredients" :key="ingredient._id">
+                  <tr v-for="ingredient in filteredIngredients" :key="ingredient._id">
                     <td class="fw-semibold">{{ ingredient.name }}</td>
                     <td><code>{{ ingredient.code }}</code></td>
                     <td>

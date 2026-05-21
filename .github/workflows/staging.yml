@@ -1,0 +1,32 @@
+name: Deploy to Staging
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.STAGING_SSH_HOST }}
+          username: ${{ secrets.STAGING_SSH_USER }}
+          key: ${{ secrets.STAGING_SSH_KEY }}
+          script: |
+            set -e
+
+            cd /var/www/html/app-barf
+
+            echo "→ Pulling latest changes..."
+            git pull origin main
+
+            echo "→ Installing dependencies..."
+            npm ci --prefer-offline
+
+            echo "→ Restarting API..."
+            pm2 restart barf-api
+
+            echo "✓ Deploy completed successfully"

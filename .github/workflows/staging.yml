@@ -21,7 +21,7 @@ jobs:
             cd /var/www/html/app-barf
 
             echo "→ Pulling latest changes..."
-            git pull origin main
+            git pull --no-rebase origin main
 
             echo "→ Installing dependencies..."
             npm ci --prefer-offline

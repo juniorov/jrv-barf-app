@@ -55,6 +55,17 @@ const calculateAge = (birthDate) => {
   return Math.max(0, Math.round(ageInYears * 10) / 10); // Redondear a 1 decimal
 };
 
+// Calcular edad humana equivalente (fórmula aproximada)
+// Calcular edad real del perro a partir de la edad humana
+// Fórmula actualizada: 1 año = 15 humanos, 2 años = 24, luego +4 por año adicional
+const calculateRealAge = (humanAge) => {
+  if (!humanAge || humanAge <= 0) return 0;
+  
+  if (humanAge <= 15) return humanAge / 15;
+  if (humanAge <= 24) return 2;
+  return 2 + (humanAge - 24) / 4;
+};
+
 // Edad calculada reactivamente
 const calculatedAge = computed(() => {
   return form.value.birthDate ? calculateAge(form.value.birthDate) : 0;
@@ -341,7 +352,7 @@ onMounted(() => {
               required
             />
             <small v-if="form.birthDate" class="text-muted">
-              Edad: {{ calculatedAge.toFixed(1) }} años
+              Edad: {{ calculatedAge.toFixed(1) }} años ({{ calculateRealAge(calculatedAge).toFixed(1) }} real)
             </small>
           </div>
           <div class="col-md-3">
@@ -418,7 +429,10 @@ onMounted(() => {
               <tbody>
                 <tr v-for="pet in pets" :key="pet._id">
                   <td>{{ pet.name }}</td>
-                  <td>{{ getPetAge(pet).toFixed(1) }} años</td>
+                  <td>
+                    <div>{{ getPetAge(pet).toFixed(1) }} años</div>
+                    <small class="text-muted">({{ calculateRealAge(getPetAge(pet)).toFixed(1) }} real)</small>
+                  </td>
                   <td>{{ pet.mealsPerDay ?? 0 }}</td>
                   <td>{{ pet.maxIngredientsPerBag ?? 5 }}</td>
                   <td>
@@ -525,7 +539,10 @@ onMounted(() => {
                       <i class="bi bi-heart-fill text-danger me-2"></i>
                       {{ pet.name }}
                     </h5>
-                    <span class="badge bg-primary">{{ getPetAge(pet).toFixed(1) }} años</span>
+                    <div>
+                      <span class="badge bg-primary">{{ getPetAge(pet).toFixed(1) }} años</span>
+                      <small class="text-muted ms-1">({{ calculateRealAge(getPetAge(pet)).toFixed(1) }} real)</small>
+                    </div>
                   </div>
                 </div>
                 <div class="card-body">

@@ -8,38 +8,11 @@ const bagStore = useBagStore();
 const loading = ref(true);
 const error = ref(null);
 const petStatistics = ref([]);
-const monthlyConsumption = ref({
-  hasData: false,
-  consumption: [],
-  totalRecords: 0,
-  monthName: '',
-  year: null
-});
 const summary = ref({});
 const inventoryStatus = ref([]);
 const forceUpdateLoading = ref({});
 const autoUpdateInterval = ref(null);
 const lastDashboardUpdate = ref(null);
-
-// Datos para el selector de mes
-const currentDate = new Date();
-const selectedYear = ref(currentDate.getFullYear());
-const selectedMonth = ref(currentDate.getMonth() + 1);
-
-const months = [
-  { value: 1, name: 'Enero' },
-  { value: 2, name: 'Febrero' },
-  { value: 3, name: 'Marzo' },
-  { value: 4, name: 'Abril' },
-  { value: 5, name: 'Mayo' },
-  { value: 6, name: 'Junio' },
-  { value: 7, name: 'Julio' },
-  { value: 8, name: 'Agosto' },
-  { value: 9, name: 'Septiembre' },
-  { value: 10, name: 'Octubre' },
-  { value: 11, name: 'Noviembre' },
-  { value: 12, name: 'Diciembre' }
-];
 
 // Función para calcular edad en el frontend (igual que en PetsView)
 const calculateAge = (birthDate) => {
@@ -71,6 +44,13 @@ const calculateAge = (birthDate) => {
   const ageInYears = years + (months / 12) + (days / 365);
   
   return Math.max(0, Math.round(ageInYears * 10) / 10); // Redondear a 1 decimal
+};
+
+const calculateRealAge = (humanAge) => {
+  if (!humanAge || humanAge <= 0) return 0;
+  if (humanAge <= 15) return humanAge / 15;
+  if (humanAge <= 24) return 2;
+  return 2 + (humanAge - 24) / 4;
 };
 
 // Función para obtener la edad de una mascota correctamente formateada
@@ -129,9 +109,6 @@ const loadDashboardData = async () => {
     inventoryStatus.value = inventoryResponse.pets || [];
     lastDashboardUpdate.value = new Date();
 
-    // Cargar datos mensuales por separado
-    await loadMonthlyData();
-
   } catch (err) {
     error.value = err.message || 'Error al cargar los datos del dashboard';
     console.error('❌ Error loading dashboard data:', err);
@@ -139,28 +116,6 @@ const loadDashboardData = async () => {
     loading.value = false;
   }
 };
-
-const loadMonthlyData = async () => {
-  try {
-    const response = await apiClient.get(`/dashboard/monthly-consumption?year=${selectedYear.value}&month=${selectedMonth.value}`);
-
-    monthlyConsumption.value = {
-      hasData: response?.hasData || false,
-      consumption: response?.consumption || [],
-      totalRecords: response?.totalRecords ?? 0,
-      monthName: response?.monthName || months.find(m => m.value === selectedMonth.value)?.name || 'Mes desconocido',
-      year: response?.year || selectedYear.value
-    };
-
-  } catch (err) {
-    error.value = `Error al cargar datos de consumo mensual: ${err.message}`;
-  }
-};
-
-// Watch para recargar datos cuando cambie el mes o año
-watch([selectedYear, selectedMonth], () => {
-  loadMonthlyData();
-}, { immediate: false });
 
 const forceInventoryUpdate = async (petId, petName) => {
   try {
@@ -298,11 +253,12 @@ onUnmounted(() => {
                         <h6 class="mb-0 fw-bold">{{ stat.pet.name }}</h6>
                         <div class="d-flex align-items-center gap-2">
                           <span class="badge bg-secondary">{{ getPetAge(stat.pet) }} años</span>
+                          <small class="text-muted">({{ calculateRealAge(getPetAge(stat.pet)).toFixed(1) }} real)</small>
                           <span
                             v-if="getPetInventoryInfo(stat.pet.id)"
-                              :class="['badge', getUpdateStatusBadge(getPetInventoryInfo(stat.pet.id)).class]"
-                            >
-                              {{ getUpdateStatusBadge(getPetInventoryInfo(stat.pet.id)).text }}
+                            :class="['badge', getUpdateStatusBadge(getPetInventoryInfo(stat.pet.id)).class]"
+                          >
+                            {{ getUpdateStatusBadge(getPetInventoryInfo(stat.pet.id)).text }}
                           </span>
                         </div>
                       </div>
@@ -362,76 +318,6 @@ onUnmounted(() => {
                       </div>
                     </div>
                   </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- Consumo mensual -->
-      <div class="row">
-        <div class="col-12">
-          <div class="card">
-            <div class="card-header">
-              <div class="d-flex justify-content-between align-items-center">
-                <h5 class="card-title mb-0">
-                  <i class="bi bi-calendar3 me-2"></i>
-                  Consumo por Ingrediente
-                </h5>
-                <div class="d-flex gap-2 align-items-center">
-                  <select v-model="selectedMonth" class="form-select form-select-sm">
-                    <option v-for="month in months" :key="month.value" :value="month.value">
-                      {{ month.name }}
-                    </option>
-                  </select>
-                  <select v-model="selectedYear" class="form-select form-select-sm">
-                    <option :value="2024">2024</option>
-                    <option :value="2025">2025</option>
-                    <option :value="2026">2026</option>
-                  </select>
-                  <button
-                    class="btn btn-outline-secondary btn-sm"
-                    @click="loadMonthlyData"
-                    title="Recargar datos del consumo mensual"
-                  >
-                    <i class="bi bi-arrow-clockwise"></i>
-                  </button>
-                </div>
-              </div>
-            </div>
-            <div class="card-body">
-              <h6 class="text-muted mb-3">
-                {{ monthlyConsumption.monthName || months.find(m => m.value === selectedMonth)?.name }} {{ monthlyConsumption.year || selectedYear }}
-                <span v-if="monthlyConsumption.totalRecords != null && monthlyConsumption.totalRecords > 0" class="badge bg-info ms-2">
-                  {{ monthlyConsumption.totalRecords }} registros
-                </span>
-              </h6>
-
-              <div v-if="!monthlyConsumption.hasData || (monthlyConsumption.consumption && monthlyConsumption.consumption.length === 0)" class="text-center py-4">
-                <i class="bi bi-info-circle text-muted fs-1 mb-3"></i>
-                <p class="text-muted mb-2">No hay datos de consumo para {{ months.find(m => m.value === selectedMonth)?.name }} {{ selectedYear }}</p>
-                <small class="text-muted">
-                  Los datos se generan automáticamente cuando:<br>
-                  • Se registran días de comida para las mascotas<br>
-                  • Se completan bolsas y se asignan al inventario<br>
-                  • Se actualiza forzadamente el inventario desde el dashboard
-                </small>
-              </div>
-              <div v-else-if="monthlyConsumption.consumption && monthlyConsumption.consumption.length > 0" class="row">
-                <div v-for="item in monthlyConsumption.consumption" :key="item.ingredient" class="col-md-4 mb-3">
-                  <div class="card border-0 bg-light">
-                    <div class="card-body text-center">
-                      <h6 class="fw-bold text-capitalize">{{ item.ingredient }}</h6>
-                      <div class="fs-4 text-primary fw-bold">{{ item.amount }}g</div>
-                      <small class="text-muted">Total consumido</small>
-                    </div>
-                  </div>
-                </div>
-              </div>
-              <div v-else class="text-center py-4">
-                <div class="spinner-border text-primary" role="status">
-                  <span class="visually-hidden">Cargando consumo mensual...</span>
                 </div>
               </div>
             </div>

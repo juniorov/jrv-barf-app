@@ -53,7 +53,7 @@ const isActive = (path) => {
 <template>
   <div class="min-vh-100 d-flex flex-column" style="background-color: var(--color-background);">
     <!-- Desktop Navbar -->
-    <nav class="navbar navbar-expand-md navbar-dark d-none d-md-flex" style="background-color: var(--color-foreground);">
+    <nav class="navbar navbar-expand-md navbar-dark d-none d-md-flex" style="background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-secondary) 100%);">
       <div class="container">
         <RouterLink to="/app" class="navbar-brand fw-bold">JRV BARF</RouterLink>
         <button
@@ -100,7 +100,7 @@ const isActive = (path) => {
     </nav>
 
     <!-- Mobile Header -->
-    <header class="d-md-none sticky-top" style="background-color: var(--color-foreground); z-index: var(--z-sticky);">
+    <header class="d-md-none sticky-top" style="background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-secondary) 100%); z-index: var(--z-sticky);">
       <div class="d-flex justify-content-between align-items-center px-4 py-3">
         <RouterLink to="/app" class="text-white fw-bold text-decoration-none fs-5">
           JRV BARF

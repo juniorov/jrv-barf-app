@@ -26,7 +26,7 @@ const onSubmit = async () => {
 </script>
 
 <template>
-  <div class="auth-page d-flex align-items-center justify-content-center" style="min-height: 100dvh; background: linear-gradient(135deg, var(--color-background) 0%, var(--color-muted) 100%);">
+  <div class="auth-page d-flex align-items-center justify-content-center" style="min-height: 100dvh; background: linear-gradient(135deg, #D1FAE5 0%, #E0F2FE 100%);">
     <div class="auth-card fade-in" style="width: 100%; max-width: 420px; padding: 0 var(--spacing-4);">
       <div class="card shadow-lg">
         <div class="card-body p-4 p-md-5">

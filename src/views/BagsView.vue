@@ -1,5 +1,5 @@
 <script setup>
-import { onMounted, ref, computed } from 'vue';
+import { onMounted, ref, computed, watch } from 'vue';
 import api from '../api/client.js';
 import { useAuthStore } from '../stores/auth.js';
 import { useBagStore } from '../stores/bags.js';
@@ -110,6 +110,28 @@ const selectedCount = computed(
 );
 
 const maxReached = computed(() => selectedCount.value >= maxIngredientsPerBag.value);
+
+watch(
+  () =>
+    form.value.selections
+      .filter((s) => s.selected)
+      .map((s) => s.ingredientId)
+      .sort()
+      .join(','),
+  () => {
+    if (!form.value.petId) return;
+    const codes = form.value.selections
+      .filter((s) => s.selected)
+      .map((s) => {
+        const ing = availableIngredients.value.find(
+          (i) => i.ingredient._id === s.ingredientId,
+        );
+        return ing?.ingredient?.code;
+      })
+      .filter(Boolean);
+    form.value.name = codes.join('+');
+  },
+);
 
 const onSubmit = async () => {
   error.value = '';
@@ -302,6 +324,7 @@ onMounted(loadData);
                 type="text"
                 class="form-control"
                 required
+                readonly
                 placeholder="Ej: Bolsa de pollo"
               />
             </div>

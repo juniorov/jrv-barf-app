@@ -8,6 +8,7 @@ import bagRoutes from './routes/bag.routes.js';
 import configRoutes from './routes/config.routes.js';
 import petRoutes from './routes/pet.routes.js';
 import dashboardRoutes from './routes/dashboard.routes.js';
+import heatCycleRoutes from './routes/heatcycle.routes.js';
 
 // Cargamos variables de entorno necesarias para la API
 if (process.env.NODE_ENV !== 'production') {
@@ -19,8 +20,8 @@ const PORT = process.env.PORT || 4000;
 // Configuramos CORS para permitir llamadas desde el frontend
 // Permitimos múltiples orígenes para desarrollo y producción
 const allowedOrigins = [
-  'http://localhost:5173',
-  'http://127.0.0.1:5173',
+  'http://localhost:*',
+  'http://127.0.0.1:*',
   'https://foodbarf.netlify.app',
   process.env.CORS_ORIGIN // Permite configurar un origen personalizado
 ].filter(Boolean); // Elimina valores undefined/null
@@ -67,6 +68,7 @@ app.use('/api/bags', bagRoutes);
 app.use('/api/config', configRoutes);
 app.use('/api/pets', petRoutes);
 app.use('/api/dashboard', dashboardRoutes);
+app.use('/api/heatcycles', heatCycleRoutes);
 
 // Middleware de manejo de errores centralizado
 app.use((err, _req, res, _next) => {

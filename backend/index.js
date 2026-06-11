@@ -20,8 +20,8 @@ const PORT = process.env.PORT || 4000;
 // Configuramos CORS para permitir llamadas desde el frontend
 // Permitimos múltiples orígenes para desarrollo y producción
 const allowedOrigins = [
-  'http://localhost:*',
-  'http://127.0.0.1:*',
+  'http://localhost:5173',
+  'http://127.0.0.1:5173',
   'https://foodbarf.netlify.app',
   process.env.CORS_ORIGIN // Permite configurar un origen personalizado
 ].filter(Boolean); // Elimina valores undefined/null

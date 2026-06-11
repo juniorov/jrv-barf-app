@@ -11,6 +11,7 @@ const BagsView = () => import('../views/BagsView.vue');
 const PortionsView = () => import('../views/PortionsView.vue');
 const ConfigView = () => import('../views/ConfigView.vue');
 const PetsView = () => import('../views/PetsView.vue');
+const HeatCycleView = () => import('../views/HeatCycleView.vue');
 
 const router = createRouter({
   history: createWebHistory(),
@@ -71,6 +72,11 @@ const router = createRouter({
           path: 'portions',
           name: 'portions',
           component: PortionsView,
+        },
+        {
+          path: 'heatcycles',
+          name: 'heatcycles',
+          component: HeatCycleView,
         },
         {
           path: 'config',

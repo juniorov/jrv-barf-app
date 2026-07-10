@@ -59,6 +59,7 @@ router.get('/pet-statistics', async (req, res, next) => {
             id: pet._id,
             name: pet.name,
             age: pet.age,
+            birthDate: pet.birthDate,
             mealsPerDay: pet.mealsPerDay,
             totalInventory: pet.totalInventory,
             consumedCount: pet.consumedCount,

@@ -437,6 +437,50 @@ Body:
 
 Respuesta: ingredientes actualizados de la mascota.
 
+#### Listar registros de peso de una mascota
+
+**GET** `/weights/:petId`
+
+Respuesta:
+
+```json
+{
+  "pet": { "_id": "mongoId", "name": "Rocky" },
+  "records": [
+    {
+      "_id": "recordId",
+      "user": "mongoUserId",
+      "pet": "mongoId",
+      "date": "2026-07-18T00:00:00.000Z",
+      "weight": 12.5,
+      "notes": "Después de la visita al veterinario"
+    }
+  ]
+}
+```
+
+#### Registrar peso
+
+**POST** `/weights/:petId`
+
+Body:
+
+```json
+{
+  "date": "2026-07-18",
+  "weight": 12.5,
+  "notes": "Opcional"
+}
+```
+
+Respuesta (201): registro creado. Devuelve 409 si ya existe un registro para esa mascota en esa fecha.
+
+#### Eliminar registro de peso
+
+**DELETE** `/weights/:id`
+
+Respuesta (204).
+
 ---
 
 ### 7.6 Configuración (requiere token)

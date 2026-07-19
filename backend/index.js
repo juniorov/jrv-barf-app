@@ -9,6 +9,7 @@ import configRoutes from './routes/config.routes.js';
 import petRoutes from './routes/pet.routes.js';
 import dashboardRoutes from './routes/dashboard.routes.js';
 import heatCycleRoutes from './routes/heatcycle.routes.js';
+import weightRoutes from './routes/weight.routes.js';
 
 // Cargamos variables de entorno necesarias para la API
 if (process.env.NODE_ENV !== 'production') {
@@ -69,6 +70,7 @@ app.use('/api/config', configRoutes);
 app.use('/api/pets', petRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/heatcycles', heatCycleRoutes);
+app.use('/api/weights', weightRoutes);
 
 // Middleware de manejo de errores centralizado
 app.use((err, _req, res, _next) => {

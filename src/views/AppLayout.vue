@@ -7,6 +7,7 @@ const router = useRouter();
 const route = useRoute();
 const auth = useAuthStore();
 const navbarCollapse = ref(null);
+const mobileMenu = ref(null);
 
 const logout = () => {
   auth.logout();
@@ -27,14 +28,25 @@ const closeNavbarMenu = () => {
   }
 };
 
+const closeMobileMenu = () => {
+  if (mobileMenu.value && window.bootstrap && window.bootstrap.Offcanvas) {
+    const bsOffcanvas = window.bootstrap.Offcanvas.getInstance(mobileMenu.value);
+    if (bsOffcanvas) {
+      bsOffcanvas.hide();
+    }
+  }
+};
+
 watch(route, () => {
   nextTick(() => {
     closeNavbarMenu();
+    closeMobileMenu();
   });
 });
 
 onMounted(() => {
   navbarCollapse.value = document.getElementById('mainNavbar');
+  mobileMenu.value = document.getElementById('mobileMenu');
 });
 
 const navItems = [
@@ -44,7 +56,13 @@ const navItems = [
   { to: '/app/bags', icon: 'bi-bag', label: 'Bolsas' },
   { to: '/app/portions', icon: 'bi-calculator', label: 'Porciones' },
   { to: '/app/heatcycles', icon: 'bi-heart-pulse', label: 'Celos' },
+  { to: '/app/weight', icon: 'bi-speedometer2', label: 'Peso' },
 ];
+
+const bottomNavPaths = ['/app/dashboard', '/app/pets', '/app/ingredients', '/app/portions'];
+const bottomNavItems = computed(() => {
+  return navItems.filter(item => bottomNavPaths.includes(item.to));
+});
 
 const isActive = (path) => {
   return route.path === path || route.path.startsWith(path + '/');
@@ -106,21 +124,59 @@ const isActive = (path) => {
         <RouterLink to="/app" class="text-white fw-bold text-decoration-none fs-5">
           JRV BARF
         </RouterLink>
-        <div class="d-flex align-items-center gap-2">
-          <RouterLink to="/app/config" class="text-white-50 p-2" aria-label="Configuración">
-            <i class="bi bi-gear fs-5"></i>
-          </RouterLink>
-          <button 
-            type="button" 
-            class="btn btn-outline-light btn-sm p-2" 
-            @click="logout"
-            aria-label="Cerrar sesión"
-          >
-            <i class="bi bi-box-arrow-right fs-5"></i>
+        <button
+          type="button"
+          class="btn btn-outline-light btn-sm p-2"
+          data-bs-toggle="offcanvas"
+          data-bs-target="#mobileMenu"
+          aria-controls="mobileMenu"
+          aria-label="Abrir menú"
+        >
+          <i class="bi bi-list fs-5"></i>
+        </button>
+      </div>
+    </header>
+
+    <!-- Mobile Hamburger Menu (Offcanvas) -->
+    <div class="offcanvas offcanvas-end d-md-none" tabindex="-1" id="mobileMenu" aria-labelledby="mobileMenuLabel">
+      <div class="offcanvas-header" style="background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-secondary) 100%);">
+        <h5 class="offcanvas-title text-white" id="mobileMenuLabel">JRV BARF</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="offcanvas" aria-label="Cerrar"></button>
+      </div>
+      <div class="offcanvas-body d-flex flex-column">
+        <ul class="nav flex-column mb-3">
+          <li class="nav-item" v-for="item in navItems" :key="item.to">
+            <RouterLink
+              :to="item.to"
+              class="nav-link d-flex align-items-center gap-2 py-2"
+              :class="{ active: isActive(item.to) }"
+            >
+              <i :class="['bi', item.icon]"></i>
+              {{ item.label }}
+            </RouterLink>
+          </li>
+          <li class="nav-item">
+            <RouterLink
+              to="/app/config"
+              class="nav-link d-flex align-items-center gap-2 py-2"
+              :class="{ active: isActive('/app/config') }"
+            >
+              <i class="bi bi-gear"></i>
+              Configuración
+            </RouterLink>
+          </li>
+        </ul>
+        <div class="mt-auto pt-3 border-top">
+          <p class="small mb-2" style="color: var(--color-text-secondary);" v-if="auth.user">
+            {{ auth.user.email }}
+          </p>
+          <button type="button" class="btn btn-outline-danger w-100" @click="logout">
+            <i class="bi bi-box-arrow-right me-1"></i>
+            Cerrar sesión
           </button>
         </div>
       </div>
-    </header>
+    </div>
 
     <!-- Main Content -->
     <main class="flex-grow-1 main-content">
@@ -132,7 +188,7 @@ const isActive = (path) => {
     <!-- Mobile Bottom Navigation -->
     <nav class="bottom-nav d-md-none">
       <ul class="bottom-nav-items">
-        <li v-for="item in navItems" :key="item.to">
+        <li v-for="item in bottomNavItems" :key="item.to">
           <RouterLink 
             :to="item.to" 
             class="bottom-nav-item"
@@ -161,6 +217,19 @@ const isActive = (path) => {
 .nav-link.active {
   color: white !important;
   border-bottom: 2px solid white;
+}
+
+.offcanvas .nav-link {
+  color: var(--color-text-primary);
+  border-radius: var(--radius-md, 8px);
+  padding-left: var(--spacing-2);
+}
+
+.offcanvas .nav-link.active {
+  color: var(--color-primary) !important;
+  background-color: rgba(16, 185, 129, 0.08);
+  border-bottom: none;
+  font-weight: 600;
 }
 
 @media (max-width: 767.98px) {

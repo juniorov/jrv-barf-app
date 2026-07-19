@@ -150,6 +150,7 @@ const isActive = (path) => {
               :to="item.to"
               class="nav-link d-flex align-items-center gap-2 py-2"
               :class="{ active: isActive(item.to) }"
+              data-bs-dismiss="offcanvas"
             >
               <i :class="['bi', item.icon]"></i>
               {{ item.label }}
@@ -160,6 +161,7 @@ const isActive = (path) => {
               to="/app/config"
               class="nav-link d-flex align-items-center gap-2 py-2"
               :class="{ active: isActive('/app/config') }"
+              data-bs-dismiss="offcanvas"
             >
               <i class="bi bi-gear"></i>
               Configuración
@@ -170,7 +172,7 @@ const isActive = (path) => {
           <p class="small mb-2" style="color: var(--color-text-secondary);" v-if="auth.user">
             {{ auth.user.email }}
           </p>
-          <button type="button" class="btn btn-outline-danger w-100" @click="logout">
+          <button type="button" class="btn btn-outline-danger w-100" data-bs-dismiss="offcanvas" @click="logout">
             <i class="bi bi-box-arrow-right me-1"></i>
             Cerrar sesión
           </button>

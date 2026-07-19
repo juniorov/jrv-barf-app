@@ -44,6 +44,7 @@ const navItems = [
   { to: '/app/bags', icon: 'bi-bag', label: 'Bolsas' },
   { to: '/app/portions', icon: 'bi-calculator', label: 'Porciones' },
   { to: '/app/heatcycles', icon: 'bi-heart-pulse', label: 'Celos' },
+  { to: '/app/weight', icon: 'bi-speedometer2', label: 'Peso' },
 ];
 
 const isActive = (path) => {

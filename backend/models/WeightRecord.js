@@ -9,6 +9,8 @@ const weightRecordSchema = new mongoose.Schema(
     pet: { type: mongoose.Schema.Types.ObjectId, ref: 'Pet', required: true, index: true },
     date: { type: Date, required: true },
     weight: { type: Number, required: true, min: 0 },
+    chestGirth: { type: Number, min: 0 },
+    rearGirth: { type: Number, min: 0 },
     notes: { type: String, default: '' },
   },
   { timestamps: true },

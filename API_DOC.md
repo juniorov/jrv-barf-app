@@ -453,11 +453,15 @@ Respuesta:
       "pet": "mongoId",
       "date": "2026-07-18T00:00:00.000Z",
       "weight": 12.5,
+      "chestGirth": 45.5,
+      "rearGirth": 40,
       "notes": "Después de la visita al veterinario"
     }
   ]
 }
 ```
+
+`chestGirth` (PT - Parte Torácica) y `rearGirth` (PP - Parte Posterior) son medidas opcionales en centímetros que solo se registran en la tabla de historial, no se incluyen en el gráfico de evolución de peso.
 
 #### Registrar peso
 
@@ -469,9 +473,13 @@ Body:
 {
   "date": "2026-07-18",
   "weight": 12.5,
+  "chestGirth": 45.5,
+  "rearGirth": 40,
   "notes": "Opcional"
 }
 ```
+
+`chestGirth` y `rearGirth` son opcionales.
 
 Respuesta (201): registro creado. Devuelve 409 si ya existe un registro para esa mascota en esa fecha.
 

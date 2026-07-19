@@ -31,7 +31,7 @@ router.post('/:petId', async (req, res, next) => {
       return res.status(404).json({ message: 'Mascota no encontrada' });
     }
 
-    const { date, weight, notes } = req.body;
+    const { date, weight, chestGirth, rearGirth, notes } = req.body;
     if (!date) {
       return res.status(400).json({ message: 'La fecha es obligatoria' });
     }
@@ -39,6 +39,22 @@ router.post('/:petId', async (req, res, next) => {
     const weightValue = Number(weight);
     if (weight === undefined || weight === null || weight === '' || isNaN(weightValue) || weightValue <= 0) {
       return res.status(400).json({ message: 'El peso debe ser un número mayor a 0' });
+    }
+
+    let chestGirthValue;
+    if (chestGirth !== undefined && chestGirth !== null && chestGirth !== '') {
+      chestGirthValue = Number(chestGirth);
+      if (isNaN(chestGirthValue) || chestGirthValue <= 0) {
+        return res.status(400).json({ message: 'La parte torácica (PT) debe ser un número mayor a 0' });
+      }
+    }
+
+    let rearGirthValue;
+    if (rearGirth !== undefined && rearGirth !== null && rearGirth !== '') {
+      rearGirthValue = Number(rearGirth);
+      if (isNaN(rearGirthValue) || rearGirthValue <= 0) {
+        return res.status(400).json({ message: 'La parte posterior (PP) debe ser un número mayor a 0' });
+      }
     }
 
     const parsed = new Date(date);
@@ -60,6 +76,8 @@ router.post('/:petId', async (req, res, next) => {
       pet: req.params.petId,
       date: parsed,
       weight: weightValue,
+      chestGirth: chestGirthValue,
+      rearGirth: rearGirthValue,
       notes: notes || '',
     });
 

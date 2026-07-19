@@ -1,7 +1,10 @@
 <script setup>
 import { ref, onMounted, watch, nextTick, computed } from 'vue';
 import { useRouter, useRoute, RouterLink, RouterView } from 'vue-router';
+import bootstrap from 'bootstrap/dist/js/bootstrap.bundle.min.js';
 import { useAuthStore } from '../stores/auth.js';
+
+const { Collapse, Offcanvas } = bootstrap;
 
 const router = useRouter();
 const route = useRoute();
@@ -16,11 +19,9 @@ const logout = () => {
 
 const closeNavbarMenu = () => {
   if (navbarCollapse.value) {
-    if (window.bootstrap && window.bootstrap.Collapse) {
-      const bsCollapse = window.bootstrap.Collapse.getInstance(navbarCollapse.value);
-      if (bsCollapse) {
-        bsCollapse.hide();
-      }
+    const bsCollapse = Collapse.getInstance(navbarCollapse.value);
+    if (bsCollapse) {
+      bsCollapse.hide();
     } else {
       navbarCollapse.value.classList.remove('show');
       navbarCollapse.value.classList.add('collapse');
@@ -29,8 +30,8 @@ const closeNavbarMenu = () => {
 };
 
 const closeMobileMenu = () => {
-  if (mobileMenu.value && window.bootstrap && window.bootstrap.Offcanvas) {
-    const bsOffcanvas = window.bootstrap.Offcanvas.getInstance(mobileMenu.value);
+  if (mobileMenu.value) {
+    const bsOffcanvas = Offcanvas.getInstance(mobileMenu.value);
     if (bsOffcanvas) {
       bsOffcanvas.hide();
     }
@@ -87,8 +88,8 @@ const isActive = (path) => {
         <div id="mainNavbar" class="collapse navbar-collapse">
           <ul class="navbar-nav me-auto mb-2 mb-lg-0">
             <li class="nav-item" v-for="item in navItems" :key="item.to">
-              <RouterLink 
-                :to="item.to" 
+              <RouterLink
+                :to="item.to"
                 class="nav-link"
                 :class="{ active: isActive(item.to) }"
               >
@@ -104,9 +105,9 @@ const isActive = (path) => {
             <span class="navbar-text small text-white-50" v-if="auth.user">
               {{ auth.user.email }}
             </span>
-            <button 
-              type="button" 
-              class="btn btn-outline-light btn-sm" 
+            <button
+              type="button"
+              class="btn btn-outline-light btn-sm"
               @click="logout"
               aria-label="Cerrar sesión"
             >
@@ -122,7 +123,7 @@ const isActive = (path) => {
     <header class="d-md-none sticky-top" style="background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-secondary) 100%); z-index: var(--z-sticky);">
       <div class="d-flex justify-content-between align-items-center px-4 py-3">
         <RouterLink to="/app" class="text-white fw-bold text-decoration-none fs-5">
-          JRV BARF
+          BARF
         </RouterLink>
         <button
           type="button"
@@ -150,7 +151,7 @@ const isActive = (path) => {
               :to="item.to"
               class="nav-link d-flex align-items-center gap-2 py-2"
               :class="{ active: isActive(item.to) }"
-              data-bs-dismiss="offcanvas"
+              @click="closeMobileMenu"
             >
               <i :class="['bi', item.icon]"></i>
               {{ item.label }}
@@ -161,7 +162,7 @@ const isActive = (path) => {
               to="/app/config"
               class="nav-link d-flex align-items-center gap-2 py-2"
               :class="{ active: isActive('/app/config') }"
-              data-bs-dismiss="offcanvas"
+              @click="closeMobileMenu"
             >
               <i class="bi bi-gear"></i>
               Configuración
@@ -172,7 +173,7 @@ const isActive = (path) => {
           <p class="small mb-2" style="color: var(--color-text-secondary);" v-if="auth.user">
             {{ auth.user.email }}
           </p>
-          <button type="button" class="btn btn-outline-danger w-100" data-bs-dismiss="offcanvas" @click="logout">
+          <button type="button" class="btn btn-outline-danger w-100" @click="closeMobileMenu(); logout()">
             <i class="bi bi-box-arrow-right me-1"></i>
             Cerrar sesión
           </button>
@@ -191,8 +192,8 @@ const isActive = (path) => {
     <nav class="bottom-nav d-md-none">
       <ul class="bottom-nav-items">
         <li v-for="item in bottomNavItems" :key="item.to">
-          <RouterLink 
-            :to="item.to" 
+          <RouterLink
+            :to="item.to"
             class="bottom-nav-item"
             :class="{ active: isActive(item.to) }"
             :aria-current="isActive(item.to) ? 'page' : undefined"

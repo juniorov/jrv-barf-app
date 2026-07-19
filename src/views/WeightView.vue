@@ -24,6 +24,8 @@ const records = ref([]);
 const loading = ref(false);
 const newDate = ref('');
 const newWeight = ref('');
+const newChestGirth = ref('');
+const newRearGirth = ref('');
 const newNotes = ref('');
 const showForm = ref(false);
 
@@ -41,9 +43,9 @@ const todayISODate = () => {
 
 const formatDisplayDate = (dateStr) => {
   const d = new Date(dateStr);
-  const day = String(d.getDate()).padStart(2, '0');
-  const month = String(d.getMonth() + 1).padStart(2, '0');
-  const year = d.getFullYear();
+  const day = String(d.getUTCDate()).padStart(2, '0');
+  const month = String(d.getUTCMonth() + 1).padStart(2, '0');
+  const year = d.getUTCFullYear();
   return `${day}/${month}/${year}`;
 };
 
@@ -130,6 +132,8 @@ const loadRecords = async () => {
 const onPetChange = async () => {
   newDate.value = todayISODate();
   newWeight.value = '';
+  newChestGirth.value = '';
+  newRearGirth.value = '';
   newNotes.value = '';
   showForm.value = false;
   records.value = [];
@@ -155,17 +159,29 @@ const addRecord = async () => {
     toast.error('Ingresa un peso válido');
     return;
   }
+  if (newChestGirth.value && (isNaN(Number(newChestGirth.value)) || Number(newChestGirth.value) <= 0)) {
+    toast.error('Ingresa una medida de parte torácica (PT) válida');
+    return;
+  }
+  if (newRearGirth.value && (isNaN(Number(newRearGirth.value)) || Number(newRearGirth.value) <= 0)) {
+    toast.error('Ingresa una medida de parte posterior (PP) válida');
+    return;
+  }
   if (!selectedPetId.value) return;
 
   try {
     await api.post(`/weights/${selectedPetId.value}`, {
       date: newDate.value,
       weight: weightValue,
+      chestGirth: newChestGirth.value ? Number(newChestGirth.value) : undefined,
+      rearGirth: newRearGirth.value ? Number(newRearGirth.value) : undefined,
       notes: newNotes.value,
     });
     toast.success('Peso registrado correctamente');
     newDate.value = todayISODate();
     newWeight.value = '';
+    newChestGirth.value = '';
+    newRearGirth.value = '';
     newNotes.value = '';
     showForm.value = false;
     await loadRecords();
@@ -306,7 +322,29 @@ onMounted(() => {
                   required
                 />
               </div>
-              <div class="col-12 col-md-4">
+              <div class="col-6 col-md-2">
+                <label class="form-label" title="Parte Torácica">PT (cm)</label>
+                <input
+                  v-model="newChestGirth"
+                  type="number"
+                  step="0.1"
+                  min="0.1"
+                  class="form-control"
+                  placeholder="Opcional"
+                />
+              </div>
+              <div class="col-6 col-md-2">
+                <label class="form-label" title="Parte Posterior">PP (cm)</label>
+                <input
+                  v-model="newRearGirth"
+                  type="number"
+                  step="0.1"
+                  min="0.1"
+                  class="form-control"
+                  placeholder="Opcional"
+                />
+              </div>
+              <div class="col-12">
                 <label class="form-label">Notas (opcional)</label>
                 <input
                   v-model="newNotes"
@@ -341,6 +379,8 @@ onMounted(() => {
                 <tr>
                   <th>Fecha</th>
                   <th>Peso</th>
+                  <th title="Parte Torácica">PT</th>
+                  <th title="Parte Posterior">PP</th>
                   <th>Notas</th>
                   <th style="width: 80px;"></th>
                 </tr>
@@ -349,6 +389,8 @@ onMounted(() => {
                 <tr v-for="record in recordsDesc" :key="record._id">
                   <td class="fw-semibold">{{ formatDisplayDate(record.date) }}</td>
                   <td>{{ record.weight }} kg</td>
+                  <td>{{ record.chestGirth != null ? `${record.chestGirth} cm` : '—' }}</td>
+                  <td>{{ record.rearGirth != null ? `${record.rearGirth} cm` : '—' }}</td>
                   <td style="color: var(--color-text-secondary);">{{ record.notes || '—' }}</td>
                   <td>
                     <button

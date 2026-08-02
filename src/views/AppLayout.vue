@@ -60,9 +60,9 @@ const navItems = [
   { to: '/app/weight', icon: 'bi-speedometer2', label: 'Peso' },
 ];
 
-const bottomNavPaths = ['/app/dashboard', '/app/pets', '/app/ingredients', '/app/portions'];
+const bottomNavPaths = ['/app/dashboard', '/app/pets', '/app/ingredients', '/app/portions', '/app/bags'];
 const bottomNavItems = computed(() => {
-  return navItems.filter(item => bottomNavPaths.includes(item.to));
+  return bottomNavPaths.map(path => navItems.find(item => item.to === path));
 });
 
 const isActive = (path) => {
